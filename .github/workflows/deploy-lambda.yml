@@ -1,0 +1,64 @@
+name: Deploy to AWS Lambda
+
+on:
+  push:
+    branches:
+      - 'deploy/lambda'
+
+jobs:
+  deploy-lambda:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GOOS: linux
+      GOARCH: amd64
+      CGO_ENABLED: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Download deps
+        run: go mod download
+
+      - name: Build Lambda bootstrap
+        run: |
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          COMMIT=${GITHUB_SHA}
+          VERSION=${GITHUB_REF_NAME}
+          go build -trimpath -ldflags "-s -w -X main.buildTime=${BUILD_TIME} -X main.commitHash=${COMMIT} -X main.version=${VERSION}" -o bootstrap main.go
+
+      - name: Package function.zip
+        run: |
+          zip -j function.zip bootstrap
+          ls -lh function.zip
+          sha256sum function.zip
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy (update-function-code)
+        run: |
+          if [ -z "${{ secrets.LAMBDA_FUNCTION_NAME }}" ]; then
+            echo "LAMBDA_FUNCTION_NAME secret is required" >&2
+            exit 1
+          fi
+          aws lambda update-function-code \
+            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
+            --zip-file fileb://function.zip \
+            --publish
+
+      - name: Post-deploy info
+        run: |
+          aws lambda get-function-configuration \
+            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
+            --query '{LastModified:LastModified,Version:Version,Runtime:Runtime,Architectures:Architectures}'

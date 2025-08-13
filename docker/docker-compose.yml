@@ -1,0 +1,15 @@
+services:
+  random:
+    image: random:latest
+    container_name: random
+    restart: unless-stopped
+    mem_limit: 32M
+    cpus: 0.3
+    user: "8080:8080"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    ports:
+      - "0.0.0.0:8080:8080"
