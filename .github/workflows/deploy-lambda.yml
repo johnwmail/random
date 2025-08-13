@@ -33,11 +33,11 @@ jobs:
           VERSION=${GITHUB_REF_NAME}
           go build -trimpath -ldflags "-s -w -X main.buildTime=${BUILD_TIME} -X main.commitHash=${COMMIT} -X main.version=${VERSION}" -o bootstrap main.go
 
-      - name: Package function.zip
+      - name: Prepare code artifacts
         run: |
-          zip -j function.zip bootstrap
-          ls -lh function.zip
-          sha256sum function.zip
+          mkdir -p lambda-artifacts
+          mv -f bootstrap lambda-artifacts/bootstrap
+          ls -l lambda-artifacts
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -46,19 +46,26 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy (update-function-code)
+      - name: Export function name to env
         run: |
           if [ -z "${{ secrets.LAMBDA_FUNCTION_NAME }}" ]; then
             echo "LAMBDA_FUNCTION_NAME secret is required" >&2
             exit 1
           fi
-          aws lambda update-function-code \
-            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
-            --zip-file fileb://function.zip \
-            --publish
+          echo "LAMBDA_FUNCTION_NAME=${{ secrets.LAMBDA_FUNCTION_NAME }}" >> "$GITHUB_ENV"
+
+      - name: Deploy Lambda Function
+        id: lambda-deploy
+        uses: aws-actions/aws-lambda-deploy@v1
+        with:
+          function-name: ${{ env.LAMBDA_FUNCTION_NAME }}
+          code-artifacts-dir: lambda-artifacts
+          architectures: x86_64
+          runtime: provided.al2
+          handler: bootstrap
+          publish: true
 
       - name: Post-deploy info
         run: |
-          aws lambda get-function-configuration \
-            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
-            --query '{LastModified:LastModified,Version:Version,Runtime:Runtime,Architectures:Architectures}'
+          echo "Function ARN: ${{ steps.lambda-deploy.outputs.function-arn }}"
+          echo "Version:      ${{ steps.lambda-deploy.outputs.version }}"
