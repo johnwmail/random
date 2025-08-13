@@ -46,22 +46,21 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Export function name to env
+      - name: Check Lambda function name secret
         run: |
           if [ -z "${{ secrets.LAMBDA_FUNCTION_NAME }}" ]; then
             echo "LAMBDA_FUNCTION_NAME secret is required" >&2
             exit 1
           fi
-          echo "LAMBDA_FUNCTION_NAME=${{ secrets.LAMBDA_FUNCTION_NAME }}" >> "$GITHUB_ENV"
 
       - name: Deploy Lambda Function
         id: lambda-deploy
         uses: aws-actions/aws-lambda-deploy@v1
         with:
-          function-name: ${{ env.LAMBDA_FUNCTION_NAME }}
+          function-name: ${{ secrets.LAMBDA_FUNCTION_NAME }}
           code-artifacts-dir: lambda-artifacts
           architectures: x86_64
-          runtime: provided.al2
+          runtime: provided.al2023
           handler: bootstrap
           publish: true
 
