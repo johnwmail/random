@@ -90,15 +90,16 @@ jobs:
           set -euo pipefail
           RESP=$(curl -fsS "$URL")
           echo "Response: $RESP"
-          A_LEN=$(echo "$RESP" | jq -r '.a | tostring | length')
-          P_LEN=$(echo "$RESP" | jq -r '.p | tostring | length')
-          echo "Computed lengths -> a: $A_LEN, p: $P_LEN"
+          # Measure lengths of the returned strings
+          A_LEN=$(echo "$RESP" | jq -r '.alphanumeric.string | length')
+          P_LEN=$(echo "$RESP" | jq -r '.printable.string | length')
+          echo "Computed lengths -> alphanumeric: $A_LEN, printable: $P_LEN"
           if [ "$A_LEN" != "$EXPECT_A_LEN" ]; then
-            echo "Expected a length $EXPECT_A_LEN, got $A_LEN" >&2
+            echo "Expected alphanumeric length $EXPECT_A_LEN, got $A_LEN" >&2
             exit 1
           fi
           if [ "$P_LEN" != "$EXPECT_P_LEN" ]; then
-            echo "Expected p length $EXPECT_P_LEN, got $P_LEN" >&2
+            echo "Expected printable length $EXPECT_P_LEN, got $P_LEN" >&2
             exit 1
           fi
 
