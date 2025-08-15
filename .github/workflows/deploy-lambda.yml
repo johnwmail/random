@@ -1,6 +1,12 @@
 name: Deploy to AWS Lambda
 
 on:
+  workflow_dispatch:
+    inputs:
+      function_name:
+        description: "Override Lambda function name (optional). If empty, uses secret LAMBDA_FUNCTION_NAME."
+        required: false
+        default: ""
   push:
     branches:
       - 'deploy/lambda'
@@ -47,18 +53,27 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 
-      - name: Check Lambda function name secret
+      - name: Resolve Lambda function name
+        id: resolve-fn
         run: |
+          FN_IN="${{ inputs.function_name }}"
+          if [ -n "${FN_IN}" ]; then
+            echo "Using function name from manual input: ${FN_IN}"
+            echo "name=${FN_IN}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ -z "${{ secrets.LAMBDA_FUNCTION_NAME }}" ]; then
-            echo "LAMBDA_FUNCTION_NAME secret is required" >&2
+            echo "LAMBDA_FUNCTION_NAME secret is required when no manual input is provided" >&2
             exit 1
           fi
+          echo "Using function name from secret"
+          echo "name=${{ secrets.LAMBDA_FUNCTION_NAME }}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Lambda Function
         id: lambda-deploy
         uses: aws-actions/aws-lambda-deploy@v1
         with:
-          function-name: ${{ secrets.LAMBDA_FUNCTION_NAME }}
+          function-name: ${{ steps.resolve-fn.outputs.name }}
           code-artifacts-dir: lambda-artifacts
           architectures: x86_64
           runtime: provided.al2023

@@ -55,7 +55,7 @@ jobs:
             STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text)
             echo "Current stack status: $STATUS"
             case "$STATUS" in
-              ROLLBACK_FAILED|ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED)
+              ROLLBACK_FAILED|ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED)
                 echo "Deleting stuck stack $STACK..."
                 aws cloudformation delete-stack --stack-name "$STACK"
                 echo "Waiting for deletion to complete..."
@@ -104,3 +104,56 @@ jobs:
           EP=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' --output text)
           echo "API endpoint: $EP"
           echo "endpoint=$EP" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test API endpoint
+        env:
+          EP: ${{ steps.cfn.outputs.endpoint }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EP:-}" ] || [ "${EP}" = "None" ]; then
+            echo "No endpoint output from stack." >&2
+            exit 1
+          fi
+          echo "Probing ${EP}/json ..."
+          for i in $(seq 1 15); do
+            HTTP_CODE=$(curl -sS -D /tmp/headers -o /tmp/body -w "%{http_code}" "${EP}/json?p=12&a=14") || true
+            if [ "${HTTP_CODE}" = "200" ]; then
+              echo "OK (200)"
+              echo "Response:"
+              cat /tmp/body
+              exit 0
+            fi
+            echo "Attempt ${i}: HTTP ${HTTP_CODE}; headers:"
+            sed -n '1,200p' /tmp/headers || true
+            echo "Body:"
+            sed -n '1,200p' /tmp/body || true
+            echo "Retrying in 4s..."
+            sleep 4
+          done
+          echo "API did not return 200 after retries" >&2
+          echo "--- Response headers (last attempt) ---"
+          cat /tmp/headers || true
+          echo "--- Response body (last attempt) ---"
+          cat /tmp/body || true
+          exit 1
+
+      - name: Dump Lambda logs on failure
+        if: failure()
+        env:
+          FN_ARN: ${{ steps.lambda.outputs.arn }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FN_ARN:-}" ] || [ "${FN_ARN}" = "None" ]; then
+            echo "No Lambda ARN available to fetch logs" >&2
+            exit 0
+          fi
+          FN_NAME="${FN_ARN##*:function:}"
+          LG="/aws/lambda/${FN_NAME}"
+          echo "Fetching latest log stream from ${LG} ..."
+          LS=$(aws logs describe-log-streams --log-group-name "$LG" --order-by LastEventTime --descending --max-items 1 --query 'logStreams[0].logStreamName' --output text 2>/dev/null || true)
+          if [ -n "${LS:-}" ] && [ "${LS}" != "None" ]; then
+            echo "--- Recent log events (${LS}) ---"
+            aws logs get-log-events --log-group-name "$LG" --log-stream-name "$LS" --limit 100 --output text || true
+          else
+            echo "No recent log stream found for $LG" >&2
+          fi
