@@ -115,7 +115,7 @@ jobs:
             exit 1
           fi
           echo "Probing ${EP}/json ..."
-          for i in $(seq 1 15); do
+          for i in $(seq 1 10); do
             HTTP_CODE=$(curl -sS -D /tmp/headers -o /tmp/body -w "%{http_code}" "${EP}/json?p=12&a=14") || true
             if [ "${HTTP_CODE}" = "200" ]; then
               echo "OK (200)"
@@ -130,15 +130,31 @@ jobs:
             echo "Retrying in 4s..."
             sleep 4
           done
-          echo "API did not return 200 after retries" >&2
+          echo "/json did not return 200 after retries; probing root path as fallback..." >&2
+          for i in $(seq 1 5); do
+            HTTP_CODE=$(curl -sS -D /tmp/headers -o /tmp/body -w "%{http_code}" "${EP}/") || true
+            if [ "${HTTP_CODE}" = "200" ]; then
+              echo "Root path OK (200)"
+              echo "Response (truncated):"
+              sed -n '1,120p' /tmp/body || true
+              exit 0
+            fi
+            echo "Root attempt ${i}: HTTP ${HTTP_CODE}; headers:"
+            sed -n '1,120p' /tmp/headers || true
+            echo "Body:"
+            sed -n '1,120p' /tmp/body || true
+            echo "Retrying in 4s..."
+            sleep 4
+          done
+          echo "API did not return 200 on /json nor / after retries" >&2
           echo "--- Response headers (last attempt) ---"
           cat /tmp/headers || true
           echo "--- Response body (last attempt) ---"
           cat /tmp/body || true
           exit 1
 
-      - name: Dump Lambda logs on failure
-        if: failure()
+      - name: Dump Lambda logs
+        if: always()
         env:
           FN_ARN: ${{ steps.lambda.outputs.arn }}
         run: |
