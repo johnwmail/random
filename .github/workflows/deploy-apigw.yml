@@ -55,7 +55,7 @@ jobs:
             STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text)
             echo "Current stack status: $STATUS"
             case "$STATUS" in
-              ROLLBACK_FAILED|ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED)
+              ROLLBACK_FAILED|ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED)
                 echo "Deleting stuck stack $STACK..."
                 aws cloudformation delete-stack --stack-name "$STACK"
                 echo "Waiting for deletion to complete..."
@@ -104,3 +104,27 @@ jobs:
           EP=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' --output text)
           echo "API endpoint: $EP"
           echo "endpoint=$EP" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test API endpoint
+        env:
+          EP: ${{ steps.cfn.outputs.endpoint }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EP:-}" ] || [ "${EP}" = "None" ]; then
+            echo "No endpoint output from stack." >&2
+            exit 1
+          fi
+          echo "Probing ${EP}/json ..."
+          for i in $(seq 1 15); do
+            HTTP_CODE=$(curl -sS -o /tmp/body -w "%{http_code}" "${EP}/json?p=12&a=14") || true
+            if [ "${HTTP_CODE}" = "200" ]; then
+              echo "OK (200)"
+              echo "Response:"
+              cat /tmp/body
+              exit 0
+            fi
+            echo "Attempt ${i}: HTTP ${HTTP_CODE}; retrying in 4s..."
+            sleep 4
+          done
+          echo "API did not return 200 after retries" >&2
+          exit 1
