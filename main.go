@@ -223,7 +223,7 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 
 	// Try Lambda Function URL event -> convert to APIGW v2 request
 	var furl events.LambdaFunctionURLRequest
-	if err := json.Unmarshal(payload, &furl); err == nil && (furl.RawPath != "" || furl.RequestContext.RequestID != "") {
+	if err := json.Unmarshal(payload, &furl); err == nil && (furl.RawPath != "" || furl.RequestContext.HTTP.Method != "" || furl.RequestContext.DomainName != "") {
 		converted := convertFunctionURLToV2(furl)
 		resp, err := h.v2.ProxyWithContext(ctx, converted)
 		if err != nil {
