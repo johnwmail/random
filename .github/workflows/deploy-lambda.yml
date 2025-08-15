@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     env:
       GOOS: linux
       GOARCH: amd64
@@ -42,9 +43,9 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          audience: ${{ secrets.AWS_AUDIENCE }}
           aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 
       - name: Check Lambda function name secret
         run: |
@@ -63,6 +64,7 @@ jobs:
           runtime: provided.al2023
           handler: bootstrap
           publish: true
+          role: ${{ secrets.LAMBDA_EXECUTION_ROLE }}
 
       - name: Post-deploy info
         run: |

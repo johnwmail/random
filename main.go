@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -16,6 +17,7 @@ import (
 )
 
 var ginLambda *ginadapter.GinLambda
+var ginLambdaV2 *ginadapter.GinLambdaV2
 var (
 	// Version information
 	version    string
@@ -192,7 +194,8 @@ func main() {
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
 		// Running on AWS Lambda
 		ginLambda = ginadapter.New(r)
-		lambda.Start(Handler)
+		ginLambdaV2 = ginadapter.NewV2(r)
+		lambda.Start(&universalHandler{v1: ginLambda, v2: ginLambdaV2})
 	} else {
 		// Running locally
 		if err := r.Run(":8080"); err != nil {
@@ -201,7 +204,71 @@ func main() {
 	}
 }
 
-// Handler is the Lambda function handler
-func Handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	return ginLambda.ProxyWithContext(ctx, req)
+// universalHandler routes between API Gateway v1, API Gateway v2, and Lambda Function URL events.
+type universalHandler struct {
+	v1 *ginadapter.GinLambda
+	v2 *ginadapter.GinLambdaV2
+}
+
+func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
+	// Try API Gateway v2 (also covers Function URL once converted below)
+	var v2req events.APIGatewayV2HTTPRequest
+	if err := json.Unmarshal(payload, &v2req); err == nil && (v2req.Version == "2.0" || v2req.RequestContext.HTTP.Method != "") {
+		resp, err := h.v2.ProxyWithContext(ctx, v2req)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(resp)
+	}
+
+	// Try Lambda Function URL event -> convert to APIGW v2 request
+	var furl events.LambdaFunctionURLRequest
+	if err := json.Unmarshal(payload, &furl); err == nil && (furl.RawPath != "" || furl.RequestContext.RequestID != "") {
+		converted := convertFunctionURLToV2(furl)
+		resp, err := h.v2.ProxyWithContext(ctx, converted)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(resp)
+	}
+
+	// Fallback to API Gateway v1
+	var v1req events.APIGatewayProxyRequest
+	if err := json.Unmarshal(payload, &v1req); err == nil && v1req.RequestContext.RequestID != "" {
+		resp, err := h.v1.ProxyWithContext(ctx, v1req)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(resp)
+	}
+
+	return nil, fmt.Errorf("unsupported event payload for Lambda handler")
+}
+
+// convertFunctionURLToV2 maps a Lambda Function URL event to an APIGateway v2 HTTP request for the adapter.
+func convertFunctionURLToV2(f events.LambdaFunctionURLRequest) events.APIGatewayV2HTTPRequest {
+	return events.APIGatewayV2HTTPRequest{
+		Version:               "2.0",
+		RouteKey:              "$default",
+		RawPath:               f.RawPath,
+		RawQueryString:        f.RawQueryString,
+		Cookies:               f.Cookies,
+		Headers:               f.Headers,
+		QueryStringParameters: f.QueryStringParameters,
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			AccountID:  f.RequestContext.AccountID,
+			RequestID:  f.RequestContext.RequestID,
+			DomainName: f.RequestContext.DomainName,
+			TimeEpoch:  f.RequestContext.TimeEpoch,
+			HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{
+				Method:    f.RequestContext.HTTP.Method,
+				Path:      f.RequestContext.HTTP.Path,
+				Protocol:  f.RequestContext.HTTP.Protocol,
+				SourceIP:  f.RequestContext.HTTP.SourceIP,
+				UserAgent: f.RequestContext.HTTP.UserAgent,
+			},
+		},
+		Body:            f.Body,
+		IsBase64Encoded: f.IsBase64Encoded,
+	}
 }
