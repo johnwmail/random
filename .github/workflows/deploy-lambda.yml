@@ -64,6 +64,7 @@ jobs:
           runtime: provided.al2023
           handler: bootstrap
           publish: true
+          role: ${{ secrets.LAMBDA_EXECUTION_ROLE }}
 
       - name: Post-deploy info
         run: |
