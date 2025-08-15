@@ -19,6 +19,9 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Ref ApiName
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
 
   ProxyResource:
     Type: AWS::ApiGateway::Resource
