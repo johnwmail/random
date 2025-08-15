@@ -1,0 +1,106 @@
+name: Deploy API Gateway (REST)
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_name:
+        description: "API Gateway name"
+        required: false
+        default: "random-api"
+      stage_name:
+        description: "Stage name"
+        required: false
+        default: "prod"
+  push:
+    branches:
+      - 'deploy/apigw'
+
+jobs:
+  deploy-apigw:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          audience: ${{ secrets.AWS_AUDIENCE }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      - name: Resolve Lambda Function ARN
+        id: lambda
+        env:
+          FN_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME }}
+        run: |
+          if [ -z "$FN_NAME" ]; then
+            echo "LAMBDA_FUNCTION_NAME secret is required" >&2
+            exit 1
+          fi
+          ARN=$(aws lambda get-function --function-name "$FN_NAME" --query 'Configuration.FunctionArn' --output text)
+          echo "Lambda ARN: $ARN"
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Cleanup previous failed stack (if any)
+        env:
+          STACK_NAME: random-apigw
+        run: |
+          set -euo pipefail
+          STACK="$STACK_NAME"
+          if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
+            STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text)
+            echo "Current stack status: $STATUS"
+            case "$STATUS" in
+              ROLLBACK_FAILED|ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED)
+                echo "Deleting stuck stack $STACK..."
+                aws cloudformation delete-stack --stack-name "$STACK"
+                echo "Waiting for deletion to complete..."
+                aws cloudformation wait stack-delete-complete --stack-name "$STACK" || {
+                  echo "Waiter failed; showing recent events:";
+                  aws cloudformation describe-stack-events --stack-name "$STACK" --output text | head -n 200 || true;
+                  echo "Attempting to force-delete API Gateway (if present)...";
+                  API_ID=$(aws cloudformation describe-stack-resources --stack-name "$STACK" \
+                    --query "StackResources[?ResourceType=='AWS::ApiGateway::RestApi'].PhysicalResourceId" --output text 2>/dev/null || true)
+                  if [ -n "${API_ID:-}" ] && [ "${API_ID}" != "None" ]; then
+                    echo "Deleting RestApi ${API_ID}...";
+                    aws apigateway delete-rest-api --rest-api-id "$API_ID" || true;
+                  fi
+                  echo "Retrying stack deletion...";
+                  aws cloudformation delete-stack --stack-name "$STACK" || true;
+                  aws cloudformation wait stack-delete-complete --stack-name "$STACK";
+                }
+                ;;
+              *)
+                echo "Stack exists in status $STATUS; proceeding with deploy."
+                ;;
+            esac
+          else
+            echo "Stack does not exist; proceeding."
+          fi
+
+      - name: Deploy REST API stack
+        id: cfn
+        env:
+          API_NAME: ${{ inputs.api_name }}
+          STAGE_NAME: ${{ inputs.stage_name }}
+        run: |
+          set -euo pipefail
+          STACK="random-apigw"
+          aws cloudformation deploy \
+            --stack-name "$STACK" \
+            --template-file infra/apigw-rest.yaml \
+            --parameter-overrides \
+              FunctionArn="${{ steps.lambda.outputs.arn }}" \
+              ApiName="${API_NAME:-random-api}" \
+              StageName="${STAGE_NAME:-prod}" \
+            --no-fail-on-empty-changeset \
+            || { echo "Deploy failed; recent stack events (if stack exists):"; aws cloudformation describe-stack-events --stack-name "$STACK" --output text | head -n 200 || true; exit 1; }
+
+          # Print endpoint
+          EP=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' --output text)
+          echo "API endpoint: $EP"
+          echo "endpoint=$EP" >> "$GITHUB_OUTPUT"
