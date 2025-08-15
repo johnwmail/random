@@ -239,6 +239,14 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 		if err != nil {
 			return nil, err
 		}
+		// Sanitize for REST API proxy expectations: avoid null maps and set base64 flag explicitly.
+		if resp.Headers == nil {
+			resp.Headers = map[string]string{}
+		}
+		if resp.MultiValueHeaders == nil {
+			resp.MultiValueHeaders = map[string][]string{}
+		}
+		resp.IsBase64Encoded = false
 		return json.Marshal(resp)
 	}
 

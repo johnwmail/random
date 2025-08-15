@@ -116,15 +116,23 @@ jobs:
           fi
           echo "Probing ${EP}/json ..."
           for i in $(seq 1 15); do
-            HTTP_CODE=$(curl -sS -o /tmp/body -w "%{http_code}" "${EP}/json?p=12&a=14") || true
+            HTTP_CODE=$(curl -sS -D /tmp/headers -o /tmp/body -w "%{http_code}" "${EP}/json?p=12&a=14") || true
             if [ "${HTTP_CODE}" = "200" ]; then
               echo "OK (200)"
               echo "Response:"
               cat /tmp/body
               exit 0
             fi
-            echo "Attempt ${i}: HTTP ${HTTP_CODE}; retrying in 4s..."
+            echo "Attempt ${i}: HTTP ${HTTP_CODE}; headers:"
+            sed -n '1,200p' /tmp/headers || true
+            echo "Body:"
+            sed -n '1,200p' /tmp/body || true
+            echo "Retrying in 4s..."
             sleep 4
           done
           echo "API did not return 200 after retries" >&2
+          echo "--- Response headers (last attempt) ---"
+          cat /tmp/headers || true
+          echo "--- Response body (last attempt) ---"
+          cat /tmp/body || true
           exit 1
