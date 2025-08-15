@@ -136,3 +136,24 @@ jobs:
           echo "--- Response body (last attempt) ---"
           cat /tmp/body || true
           exit 1
+
+      - name: Dump Lambda logs on failure
+        if: failure()
+        env:
+          FN_ARN: ${{ steps.lambda.outputs.arn }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FN_ARN:-}" ] || [ "${FN_ARN}" = "None" ]; then
+            echo "No Lambda ARN available to fetch logs" >&2
+            exit 0
+          fi
+          FN_NAME="${FN_ARN##*:function:}"
+          LG="/aws/lambda/${FN_NAME}"
+          echo "Fetching latest log stream from ${LG} ..."
+          LS=$(aws logs describe-log-streams --log-group-name "$LG" --order-by LastEventTime --descending --max-items 1 --query 'logStreams[0].logStreamName' --output text 2>/dev/null || true)
+          if [ -n "${LS:-}" ] && [ "${LS}" != "None" ]; then
+            echo "--- Recent log events (${LS}) ---"
+            aws logs get-log-events --log-group-name "$LG" --log-stream-name "$LS" --limit 100 --output text || true
+          else
+            echo "No recent log stream found for $LG" >&2
+          fi
