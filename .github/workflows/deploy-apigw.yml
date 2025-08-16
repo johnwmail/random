@@ -169,7 +169,11 @@ jobs:
           LS=$(aws logs describe-log-streams --log-group-name "$LG" --order-by LastEventTime --descending --max-items 1 --query 'logStreams[0].logStreamName' --output text 2>/dev/null || true)
           if [ -n "${LS:-}" ] && [ "${LS}" != "None" ]; then
             echo "--- Recent log events (${LS}) ---"
-            aws logs get-log-events --log-group-name "$LG" --log-stream-name "$LS" --limit 100 --output text || true
+            if ! aws logs get-log-events --log-group-name "$LG" --log-stream-name "$LS" --limit 200 --output text; then
+              echo "get-log-events failed; falling back to tail..." >&2
+              aws logs tail "$LG" --since 15m --format short || true
+            fi
           else
-            echo "No recent log stream found for $LG" >&2
+            echo "No recent log stream found; tailing last 15m..." >&2
+            aws logs tail "$LG" --since 15m --format short || true
           fi

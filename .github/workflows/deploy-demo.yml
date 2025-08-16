@@ -1,0 +1,134 @@
+name: Deploy Demo (REST)
+
+on:
+  workflow_dispatch:
+    inputs:
+      function_name:
+        description: "Demo Lambda function name"
+        required: true
+        default: "random-demo"
+      api_name:
+        description: "API Gateway name"
+        required: false
+        default: "random-demo-api"
+      stage_name:
+        description: "Stage name"
+        required: false
+        default: "prod"
+      stack_name:
+        description: "CloudFormation stack name"
+        required: false
+        default: "random-demo-apigw"
+
+jobs:
+  deploy-demo:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GOOS: linux
+      GOARCH: amd64
+      CGO_ENABLED: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build demo Lambda bootstrap
+        run: |
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          COMMIT=${GITHUB_SHA}
+          VERSION=${GITHUB_REF_NAME}
+          go build -trimpath -ldflags "-s -w -X main.buildTime=${BUILD_TIME} -X main.commitHash=${COMMIT} -X main.version=${VERSION}" -o bootstrap ./cmd/demo
+
+      - name: Prepare code artifacts
+        run: |
+          mkdir -p lambda-artifacts
+          mv -f bootstrap lambda-artifacts/bootstrap
+          ls -l lambda-artifacts
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          audience: ${{ secrets.AWS_AUDIENCE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      - name: Deploy Demo Lambda
+        id: demo-lambda
+        uses: aws-actions/aws-lambda-deploy@v1
+        with:
+          function-name: ${{ inputs.function_name }}
+          code-artifacts-dir: lambda-artifacts
+          architectures: x86_64
+          runtime: provided.al2023
+          handler: bootstrap
+          publish: true
+          role: ${{ secrets.LAMBDA_EXECUTION_ROLE }}
+
+      - name: Deploy REST API (demo)
+        id: demo-cfn
+        env:
+          STACK_NAME: ${{ inputs.stack_name }}
+          API_NAME: ${{ inputs.api_name }}
+          STAGE_NAME: ${{ inputs.stage_name }}
+        run: |
+          set -euo pipefail
+          STACK="${STACK_NAME}"
+          aws cloudformation deploy \
+            --stack-name "$STACK" \
+            --template-file infra/apigw-rest-demo.yaml \
+            --parameter-overrides \
+              FunctionArn="${{ steps.demo-lambda.outputs.function-arn }}" \
+              ApiName="${API_NAME}" \
+              StageName="${STAGE_NAME}" \
+            --no-fail-on-empty-changeset
+
+          EP=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' --output text)
+          echo "Demo API endpoint: $EP"
+          echo "endpoint=$EP" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test demo API
+        env:
+          EP: ${{ steps.demo-cfn.outputs.endpoint }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EP:-}" ] || [ "${EP}" = "None" ]; then
+            echo "No endpoint output from stack." >&2
+            exit 1
+          fi
+          echo "Probing ${EP}/hello ..."
+          HTTP_CODE=$(curl -sS -D /tmp/headers -o /tmp/body -w "%{http_code}" "${EP}/hello") || true
+          echo "HTTP ${HTTP_CODE}"
+          echo "--- headers ---"; sed -n '1,200p' /tmp/headers || true
+          echo "--- body ---"; sed -n '1,200p' /tmp/body || true
+          test "${HTTP_CODE}" = "200"
+
+      - name: Dump Demo Lambda logs
+        if: always()
+        env:
+          FN_ARN: ${{ steps.demo-lambda.outputs.function-arn }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FN_ARN:-}" ] || [ "${FN_ARN}" = "None" ]; then
+            echo "No Lambda ARN available to fetch logs" >&2
+            exit 0
+          fi
+          FN_NAME="${FN_ARN##*:function:}"
+          LG="/aws/lambda/${FN_NAME}"
+          echo "Fetching latest log stream from ${LG} ..."
+          LS=$(aws logs describe-log-streams --log-group-name "$LG" --order-by LastEventTime --descending --max-items 1 --query 'logStreams[0].logStreamName' --output text 2>/dev/null || true)
+          if [ -n "${LS:-}" ] && [ "${LS}" != "None" ]; then
+            if ! aws logs get-log-events --log-group-name "$LG" --log-stream-name "$LS" --limit 200 --output text; then
+              echo "get-log-events failed; falling back to tail..." >&2
+              aws logs tail "$LG" --since 15m --format short || true
+            fi
+          else
+            echo "No recent log stream found; tailing last 15m..." >&2
+            aws logs tail "$LG" --since 15m --format short || true
+          fi
