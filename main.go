@@ -246,7 +246,7 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 
 	// Fallback to API Gateway v1
 	var v1req events.APIGatewayProxyRequest
-	if err := json.Unmarshal(payload, &v1req); err == nil && v1req.RequestContext.RequestID != "" {
+	if err := json.Unmarshal(payload, &v1req); err == nil && (v1req.HTTPMethod != "" || v1req.Path != "" || v1req.RequestContext.RequestID != "") {
 		resp, err := h.v1.ProxyWithContext(ctx, v1req)
 		if err != nil {
 			return nil, err
@@ -260,6 +260,45 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 		}
 		resp.IsBase64Encoded = false
 		return json.Marshal(resp)
+	}
+
+	// Permissive fallback: some console or custom test events use non-standard shapes.
+	// Try to coerce generic JSON payloads into v2 or v1 shapes by inspecting keys.
+	var generic map[string]interface{}
+	if err := json.Unmarshal(payload, &generic); err == nil {
+		// Detect v2-like (version = "2.0" or requestContext.http present)
+		if v, ok := generic["version"].(string); ok && v == "2.0" {
+			if b, err := json.Marshal(generic); err == nil {
+				var v2req events.APIGatewayV2HTTPRequest
+				if err := json.Unmarshal(b, &v2req); err == nil {
+					resp, err := h.v2.ProxyWithContext(ctx, v2req)
+					if err != nil {
+						return nil, err
+					}
+					return json.Marshal(resp)
+				}
+			}
+		}
+
+		if _, hasHTTPMethod := generic["httpMethod"]; hasHTTPMethod || generic["path"] != nil || generic["resource"] != nil {
+			if b, err := json.Marshal(generic); err == nil {
+				var v1 events.APIGatewayProxyRequest
+				if err := json.Unmarshal(b, &v1); err == nil {
+					resp, err := h.v1.ProxyWithContext(ctx, v1)
+					if err != nil {
+						return nil, err
+					}
+					if resp.Headers == nil {
+						resp.Headers = map[string]string{}
+					}
+					if resp.MultiValueHeaders == nil {
+						resp.MultiValueHeaders = map[string][]string{}
+					}
+					resp.IsBase64Encoded = false
+					return json.Marshal(resp)
+				}
+			}
+		}
 	}
 
 	return nil, fmt.Errorf("unsupported event payload for Lambda handler")
