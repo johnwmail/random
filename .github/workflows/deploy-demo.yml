@@ -6,11 +6,11 @@ on:
       function_name:
         description: "Demo Lambda function name"
         required: true
-        default: "random-demo"
+        default: "random"
       api_name:
         description: "API Gateway name"
         required: false
-        default: "random-demo-api"
+        default: "random-api"
       stage_name:
         description: "Stage name"
         required: false
@@ -18,7 +18,7 @@ on:
       stack_name:
         description: "CloudFormation stack name"
         required: false
-        default: "random-demo-apigw"
+        default: "random-apigw"
 
 jobs:
   deploy-demo:
