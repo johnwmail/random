@@ -42,8 +42,14 @@ jobs:
             exit 1
           fi
           ARN=$(aws lambda get-function --function-name "$FN_NAME" --query 'Configuration.FunctionArn' --output text)
-          echo "Lambda ARN: $ARN"
-          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          # If ARN is qualified with version/alias (e.g., :function:name:10), strip the qualifier
+          if [[ "$ARN" =~ ^(arn:[^:]+:lambda:[^:]+:[0-9]+:function:[^:]+):[^:]+$ ]]; then
+            BASE_ARN="${BASH_REMATCH[1]}"
+          else
+            BASE_ARN="$ARN"
+          fi
+          echo "Lambda ARN (base): $BASE_ARN"
+          echo "arn=$BASE_ARN" >> "$GITHUB_OUTPUT"
 
       - name: Cleanup previous failed stack (if any)
         env:

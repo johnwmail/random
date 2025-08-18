@@ -6,11 +6,11 @@ on:
       function_name:
         description: "Demo Lambda function name"
         required: true
-        default: "random-demo"
+        default: "random"
       api_name:
         description: "API Gateway name"
         required: false
-        default: "random-demo-api"
+        default: "random-api"
       stage_name:
         description: "Stage name"
         required: false
@@ -18,7 +18,7 @@ on:
       stack_name:
         description: "CloudFormation stack name"
         required: false
-        default: "random-demo-apigw"
+        default: "random-apigw"
 
 jobs:
   deploy-demo:
@@ -71,6 +71,34 @@ jobs:
           publish: true
           role: ${{ secrets.LAMBDA_EXECUTION_ROLE }}
 
+      - name: Cleanup previous failed demo stack (if any)
+        env:
+          STACK_NAME: ${{ inputs.stack_name }}
+        run: |
+          set -euo pipefail
+          STACK="$STACK_NAME"
+          if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
+            STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text)
+            echo "Current demo stack status: $STATUS"
+            case "$STATUS" in
+              ROLLBACK_FAILED|ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED)
+                echo "Deleting stuck stack $STACK..."
+                aws cloudformation delete-stack --stack-name "$STACK"
+                echo "Waiting for deletion to complete..."
+                aws cloudformation wait stack-delete-complete --stack-name "$STACK" || {
+                  echo "Waiter failed; showing recent events:";
+                  aws cloudformation describe-stack-events --stack-name "$STACK" --output text | head -n 200 || true;
+                  echo "Retrying deletion...";
+                  aws cloudformation delete-stack --stack-name "$STACK" || true;
+                  aws cloudformation wait stack-delete-complete --stack-name "$STACK";
+                }
+                ;;
+              *) echo "Stack exists in status $STATUS; proceeding." ;;
+            esac
+          else
+            echo "Demo stack does not exist; proceeding."
+          fi
+
       - name: Deploy REST API (demo)
         id: demo-cfn
         env:
@@ -80,14 +108,22 @@ jobs:
         run: |
           set -euo pipefail
           STACK="${STACK_NAME}"
+          # Resolve the unqualified (base) function ARN to avoid per-version permissions
+          FN_ARN=$(aws lambda get-function --function-name "${{ inputs.function_name }}" --query 'Configuration.FunctionArn' --output text)
+          case "$FN_ARN" in
+            arn:aws:lambda:*:*:function:*:*) BASE_ARN="${FN_ARN%%:*}" ;;
+            *) BASE_ARN="$FN_ARN" ;;
+          esac
+          echo "Using base Lambda ARN: ${BASE_ARN}"
           aws cloudformation deploy \
             --stack-name "$STACK" \
             --template-file infra/apigw-rest-demo.yaml \
             --parameter-overrides \
-              FunctionArn="${{ steps.demo-lambda.outputs.function-arn }}" \
+              FunctionArn="${BASE_ARN}" \
               ApiName="${API_NAME}" \
               StageName="${STAGE_NAME}" \
-            --no-fail-on-empty-changeset
+            --no-fail-on-empty-changeset \
+            || { echo "Demo deploy failed; recent stack events:"; aws cloudformation describe-stack-events --stack-name "$STACK" --output text | head -n 200 || true; exit 1; }
 
           EP=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' --output text)
           echo "Demo API endpoint: $EP"
@@ -120,7 +156,9 @@ jobs:
             exit 0
           fi
           FN_NAME="${FN_ARN##*:function:}"
-          LG="/aws/lambda/${FN_NAME}"
+          # Strip version or alias suffix (e.g., myfn:10 -> myfn)
+          FN_BASE="${FN_NAME%%:*}"
+          LG="/aws/lambda/${FN_BASE}"
           echo "Fetching latest log stream from ${LG} ..."
           LS=$(aws logs describe-log-streams --log-group-name "$LG" --order-by LastEventTime --descending --max-items 1 --query 'logStreams[0].logStreamName' --output text 2>/dev/null || true)
           if [ -n "${LS:-}" ] && [ "${LS}" != "None" ]; then
