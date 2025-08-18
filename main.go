@@ -304,8 +304,8 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 	// Final permissive fallback: forward raw payload as v1 POST / body so console tests succeed.
 	// This keeps the function usable from the Lambda console with arbitrary test events.
 	v1fallback := events.APIGatewayProxyRequest{
-		Path:              "/",
-		HTTPMethod:        "POST",
+		Path:              "/json",
+		HTTPMethod:        "GET",
 		Headers:           map[string]string{"Content-Type": "application/json"},
 		MultiValueHeaders: map[string][]string{},
 		Body:              string(payload),
