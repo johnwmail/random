@@ -301,7 +301,28 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 		}
 	}
 
-	return nil, fmt.Errorf("unsupported event payload for Lambda handler")
+	// Final permissive fallback: forward raw payload as v1 POST / body so console tests succeed.
+	// This keeps the function usable from the Lambda console with arbitrary test events.
+	v1fallback := events.APIGatewayProxyRequest{
+		Path:              "/",
+		HTTPMethod:        "POST",
+		Headers:           map[string]string{"Content-Type": "application/json"},
+		MultiValueHeaders: map[string][]string{},
+		Body:              string(payload),
+		IsBase64Encoded:   false,
+	}
+	resp, err := h.v1.ProxyWithContext(ctx, v1fallback)
+	if err != nil {
+		return nil, fmt.Errorf("unable to coerce generic payload to v1 proxy: %w", err)
+	}
+	if resp.Headers == nil {
+		resp.Headers = map[string]string{}
+	}
+	if resp.MultiValueHeaders == nil {
+		resp.MultiValueHeaders = map[string][]string{}
+	}
+	resp.IsBase64Encoded = false
+	return json.Marshal(resp)
 }
 
 // convertFunctionURLToV2 maps a Lambda Function URL event to an APIGateway v2 HTTP request for the adapter.
