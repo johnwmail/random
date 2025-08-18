@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -24,6 +25,9 @@ var (
 	buildTime  string
 	commitHash string
 )
+
+// local random source to avoid using the deprecated global seed
+var rnd *rand.Rand
 
 // RandomString struct for individual random strings
 type RandomString struct {
@@ -51,7 +55,7 @@ func GenerateRandomPrintable(length int) string {
 	specialChars := []rune("!#$%*+-=?@^_")
 
 	// Determine how many characters to replace (1 to 3, but not more than the string length).
-	numReplacements := rand.Intn(3) + 1
+	numReplacements := rnd.Intn(3) + 1
 	if numReplacements >= length {
 		numReplacements = 1
 	}
@@ -63,8 +67,8 @@ func GenerateRandomPrintable(length int) string {
 
 	// Replace characters at random positions.
 	for i := 0; i < numReplacements; i++ {
-		pos := rand.Intn(length)
-		runes[pos] = specialChars[rand.Intn(len(specialChars))]
+		pos := rnd.Intn(length)
+		runes[pos] = specialChars[rnd.Intn(len(specialChars))]
 	}
 
 	return string(runes)
@@ -75,7 +79,7 @@ func GenerateRandomAlphanumeric(length int) string {
 	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	result := make([]rune, length)
 	for i := range result {
-		result[i] = letters[rand.Intn(len(letters))]
+		result[i] = letters[rnd.Intn(len(letters))]
 	}
 	return string(result)
 }
@@ -180,6 +184,8 @@ func generateStrings(c *gin.Context) {
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
+	// Initialize a local random source for non-deterministic output across cold starts
+	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 	r := gin.Default()
 
 	// Define the endpoints
