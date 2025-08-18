@@ -108,11 +108,18 @@ jobs:
         run: |
           set -euo pipefail
           STACK="${STACK_NAME}"
+          # Resolve the unqualified (base) function ARN to avoid per-version permissions
+          FN_ARN=$(aws lambda get-function --function-name "${{ inputs.function_name }}" --query 'Configuration.FunctionArn' --output text)
+          case "$FN_ARN" in
+            arn:aws:lambda:*:*:function:*:*) BASE_ARN="${FN_ARN%%:*}" ;;
+            *) BASE_ARN="$FN_ARN" ;;
+          esac
+          echo "Using base Lambda ARN: ${BASE_ARN}"
           aws cloudformation deploy \
             --stack-name "$STACK" \
             --template-file infra/apigw-rest-demo.yaml \
             --parameter-overrides \
-              FunctionArn="${{ steps.demo-lambda.outputs.function-arn }}" \
+              FunctionArn="${BASE_ARN}" \
               ApiName="${API_NAME}" \
               StageName="${STAGE_NAME}" \
             --no-fail-on-empty-changeset \
