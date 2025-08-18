@@ -1,18 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: REST API Gateway proxying to an existing Lambda function
+Description: REST API Gateway proxying to demo Lambda function
 
 Parameters:
   FunctionArn:
     Type: String
-    Description: ARN of the target Lambda function
+    Description: ARN of the demo Lambda function
   ApiName:
     Type: String
-    Default: random-api
-    Description: Name of the API Gateway REST API
+    Default: demo-api
   StageName:
     Type: String
     Default: prod
-    Description: Stage name
 
 Resources:
   RestApi:
@@ -20,8 +18,7 @@ Resources:
     Properties:
       Name: !Ref ApiName
       EndpointConfiguration:
-        Types:
-          - REGIONAL
+        Types: [REGIONAL]
 
   ProxyResource:
     Type: AWS::ApiGateway::Resource
@@ -63,7 +60,7 @@ Resources:
       - AnyMethodRoot
     Properties:
       RestApiId: !Ref RestApi
-      Description: Deployment for proxy methods
+      Description: Deployment
 
   Stage:
     Type: AWS::ApiGateway::Stage
@@ -89,8 +86,6 @@ Resources:
         - { ApiId: !Ref RestApi }
 
 Outputs:
-  ApiId:
-    Value: !Ref RestApi
   ApiEndpoint:
     Value: !Sub
       - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${StageName}

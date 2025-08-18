@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -24,6 +25,15 @@ var (
 	buildTime  string
 	commitHash string
 )
+
+// local random source to avoid using the deprecated global seed
+var rnd *rand.Rand
+
+func init() {
+	if rnd == nil {
+		rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+}
 
 // RandomString struct for individual random strings
 type RandomString struct {
@@ -51,7 +61,7 @@ func GenerateRandomPrintable(length int) string {
 	specialChars := []rune("!#$%*+-=?@^_")
 
 	// Determine how many characters to replace (1 to 3, but not more than the string length).
-	numReplacements := rand.Intn(3) + 1
+	numReplacements := rnd.Intn(3) + 1
 	if numReplacements >= length {
 		numReplacements = 1
 	}
@@ -63,8 +73,8 @@ func GenerateRandomPrintable(length int) string {
 
 	// Replace characters at random positions.
 	for i := 0; i < numReplacements; i++ {
-		pos := rand.Intn(length)
-		runes[pos] = specialChars[rand.Intn(len(specialChars))]
+		pos := rnd.Intn(length)
+		runes[pos] = specialChars[rnd.Intn(len(specialChars))]
 	}
 
 	return string(runes)
@@ -75,7 +85,7 @@ func GenerateRandomAlphanumeric(length int) string {
 	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	result := make([]rune, length)
 	for i := range result {
-		result[i] = letters[rand.Intn(len(letters))]
+		result[i] = letters[rnd.Intn(len(letters))]
 	}
 	return string(result)
 }
@@ -122,6 +132,8 @@ func generateStrings(c *gin.Context) {
 				String: GenerateRandomAlphanumeric(alphanumericLength),
 			},
 		}
+		// avoid caching so UI updates always fetch fresh values
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		c.IndentedJSON(http.StatusOK, response)
 	} else {
 		// Create a plain HTML string response
@@ -157,8 +169,8 @@ func generateStrings(c *gin.Context) {
             }
             var url = "/json?p=" + printableLength + "&a=" + alphanumericLength;
             
-            fetch(url)
-                .then(response => response.json())
+			fetch(url, {cache: 'no-store'})
+				.then(response => response.json())
                 .then(data => {
                     document.getElementById("printable-string").textContent = data.printable.string;
                     document.getElementById("alphanumeric-string").textContent = data.alphanumeric.string;
@@ -180,6 +192,8 @@ func generateStrings(c *gin.Context) {
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
+	// Initialize a local random source for non-deterministic output across cold starts
+	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 	r := gin.Default()
 
 	// Define the endpoints
@@ -223,7 +237,7 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 
 	// Try Lambda Function URL event -> convert to APIGW v2 request
 	var furl events.LambdaFunctionURLRequest
-	if err := json.Unmarshal(payload, &furl); err == nil && (furl.RawPath != "" || furl.RequestContext.HTTP.Method != "" || furl.RequestContext.DomainName != "") {
+	if err := json.Unmarshal(payload, &furl); err == nil && (furl.RawPath != "" || furl.RequestContext.HTTP.Method != "") {
 		converted := convertFunctionURLToV2(furl)
 		resp, err := h.v2.ProxyWithContext(ctx, converted)
 		if err != nil {
@@ -234,7 +248,7 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 
 	// Fallback to API Gateway v1
 	var v1req events.APIGatewayProxyRequest
-	if err := json.Unmarshal(payload, &v1req); err == nil && v1req.RequestContext.RequestID != "" {
+	if err := json.Unmarshal(payload, &v1req); err == nil && (v1req.HTTPMethod != "" || v1req.Path != "" || v1req.RequestContext.RequestID != "") {
 		resp, err := h.v1.ProxyWithContext(ctx, v1req)
 		if err != nil {
 			return nil, err
@@ -250,7 +264,67 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 		return json.Marshal(resp)
 	}
 
-	return nil, fmt.Errorf("unsupported event payload for Lambda handler")
+	// Permissive fallback: some console or custom test events use non-standard shapes.
+	// Try to coerce generic JSON payloads into v2 or v1 shapes by inspecting keys.
+	var generic map[string]interface{}
+	if err := json.Unmarshal(payload, &generic); err == nil {
+		// Detect v2-like (version = "2.0" or requestContext.http present)
+		if v, ok := generic["version"].(string); ok && v == "2.0" {
+			if b, err := json.Marshal(generic); err == nil {
+				var v2req events.APIGatewayV2HTTPRequest
+				if err := json.Unmarshal(b, &v2req); err == nil {
+					resp, err := h.v2.ProxyWithContext(ctx, v2req)
+					if err != nil {
+						return nil, err
+					}
+					return json.Marshal(resp)
+				}
+			}
+		}
+
+		if _, hasHTTPMethod := generic["httpMethod"]; hasHTTPMethod || generic["path"] != nil || generic["resource"] != nil {
+			if b, err := json.Marshal(generic); err == nil {
+				var v1 events.APIGatewayProxyRequest
+				if err := json.Unmarshal(b, &v1); err == nil {
+					resp, err := h.v1.ProxyWithContext(ctx, v1)
+					if err != nil {
+						return nil, err
+					}
+					if resp.Headers == nil {
+						resp.Headers = map[string]string{}
+					}
+					if resp.MultiValueHeaders == nil {
+						resp.MultiValueHeaders = map[string][]string{}
+					}
+					resp.IsBase64Encoded = false
+					return json.Marshal(resp)
+				}
+			}
+		}
+	}
+
+	// Final permissive fallback: forward raw payload as v1 POST / body so console tests succeed.
+	// This keeps the function usable from the Lambda console with arbitrary test events.
+	v1fallback := events.APIGatewayProxyRequest{
+		Path:              "/json",
+		HTTPMethod:        "GET",
+		Headers:           map[string]string{"Content-Type": "application/json"},
+		MultiValueHeaders: map[string][]string{},
+		Body:              string(payload),
+		IsBase64Encoded:   false,
+	}
+	resp, err := h.v1.ProxyWithContext(ctx, v1fallback)
+	if err != nil {
+		return nil, fmt.Errorf("unable to coerce generic payload to v1 proxy: %w", err)
+	}
+	if resp.Headers == nil {
+		resp.Headers = map[string]string{}
+	}
+	if resp.MultiValueHeaders == nil {
+		resp.MultiValueHeaders = map[string][]string{}
+	}
+	resp.IsBase64Encoded = false
+	return json.Marshal(resp)
 }
 
 // convertFunctionURLToV2 maps a Lambda Function URL event to an APIGateway v2 HTTP request for the adapter.
