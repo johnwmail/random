@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
        -ldflags="-w -s -X 'main.buildTime=$(date --utc +%Y-%m-%dT%H:%M:%SZ)' \
        -X 'main.commitHash=$(git rev-parse HEAD)' \
        -X 'main.version=${VERSION:-latest}'" \
-       -v -o /random ./...
+       -v -o /random .
 
 FROM scratch
 
