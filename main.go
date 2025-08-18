@@ -132,6 +132,8 @@ func generateStrings(c *gin.Context) {
 				String: GenerateRandomAlphanumeric(alphanumericLength),
 			},
 		}
+		// avoid caching so UI updates always fetch fresh values
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		c.IndentedJSON(http.StatusOK, response)
 	} else {
 		// Create a plain HTML string response
@@ -167,8 +169,8 @@ func generateStrings(c *gin.Context) {
             }
             var url = "/json?p=" + printableLength + "&a=" + alphanumericLength;
             
-            fetch(url)
-                .then(response => response.json())
+			fetch(url, {cache: 'no-store'})
+				.then(response => response.json())
                 .then(data => {
                     document.getElementById("printable-string").textContent = data.printable.string;
                     document.getElementById("alphanumeric-string").textContent = data.alphanumeric.string;

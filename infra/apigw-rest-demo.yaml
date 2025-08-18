@@ -68,6 +68,12 @@ Resources:
       RestApiId: !Ref RestApi
       DeploymentId: !Ref Deployment
       StageName: !Ref StageName
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          CachingEnabled: false
+          CacheTtlInSeconds: 0
+          CacheDataEncrypted: false
 
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
