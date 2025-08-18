@@ -29,6 +29,12 @@ var (
 // local random source to avoid using the deprecated global seed
 var rnd *rand.Rand
 
+func init() {
+	if rnd == nil {
+		rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+}
+
 // RandomString struct for individual random strings
 type RandomString struct {
 	Length int    `json:"length"`
