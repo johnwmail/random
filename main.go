@@ -144,8 +144,7 @@ func generateStrings(c *gin.Context) {
     <title>Generated Random Strings</title>
 	<style>
 		input[type=number] {
-			width: 60px;
-			font-size: 1.2em;
+			width: 50px;
 			text-align: right;
 		}
 	</style>
