@@ -142,11 +142,13 @@ func generateStrings(c *gin.Context) {
 <html>
 <head>
     <title>Generated Random Strings</title>
-    <style>
-        input[type=number] {
-            width: 30px;
-        }
-    </style>
+	<style>
+		input[type=number] {
+			width: 60px;
+			font-size: 1.2em;
+			text-align: right;
+		}
+	</style>
     <script>
         function refreshStrings() {
             var printableLength = document.getElementById("p").value;
