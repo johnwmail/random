@@ -145,7 +145,6 @@ func generateStrings(c *gin.Context) {
 	<style>
 		input[type=number] {
 			width: 50px;
-			text-align: right;
 		}
 	</style>
     <script>
