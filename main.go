@@ -367,9 +367,7 @@ func generateStrings(c *gin.Context) {
             }
         }
 
-        @media (prefers-color-scheme: dark) {
-            /* Optional: Add dark mode support in the future */
-        }
+
     </style>
     <script>
         function refreshStrings() {
@@ -405,18 +403,58 @@ func generateStrings(c *gin.Context) {
             var text = document.getElementById(elementId).textContent;
             var button = document.getElementById(buttonId);
             
-            navigator.clipboard.writeText(text).then(function() {
-                var originalText = button.textContent;
-                button.textContent = '✓ Copied';
-                button.classList.add('copied');
-                
+            // Try modern clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function() {
+                    showCopySuccess(button);
+                }).catch(function(err) {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopy(text, button);
+                });
+            } else {
+                // Fallback for older browsers or HTTP environments
+                fallbackCopy(text, button);
+            }
+        }
+
+        function showCopySuccess(button) {
+            var originalText = button.textContent;
+            button.textContent = '✓ Copied';
+            button.classList.add('copied');
+            
+            setTimeout(function() {
+                button.textContent = originalText;
+                button.classList.remove('copied');
+            }, 2000);
+        }
+
+        function fallbackCopy(text, button) {
+            var textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                var successful = document.execCommand('copy');
+                if (successful) {
+                    showCopySuccess(button);
+                } else {
+                    button.textContent = '✗ Failed';
+                    setTimeout(function() {
+                        button.textContent = 'Copy';
+                    }, 2000);
+                }
+            } catch (err) {
+                console.error('Fallback copy failed:', err);
+                button.textContent = '✗ Failed';
                 setTimeout(function() {
-                    button.textContent = originalText;
-                    button.classList.remove('copied');
+                    button.textContent = 'Copy';
                 }, 2000);
-            }).catch(function(err) {
-                console.error('Failed to copy:', err);
-            });
+            } finally {
+                document.body.removeChild(textarea);
+            }
         }
     </script>
 </head>
