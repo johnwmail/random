@@ -70,7 +70,7 @@ func TestGenerateStringsHTML(t *testing.T) {
 
 	// Check the response
 	assert.Equal(t, http.StatusOK, w.Code, "HTTP status code should be 200")
-	assert.True(t, strings.Contains(w.Body.String(), "<h1>Generated Random Strings</h1>"), "Response should contain the correct HTML title")
-	assert.True(t, strings.Contains(w.Body.String(), "Printable:"), "Response should contain Printable string")
-	assert.True(t, strings.Contains(w.Body.String(), "Alphanumeric:"), "Response should contain Alphanumeric string")
+	assert.True(t, strings.Contains(w.Body.String(), "<h1>🎲 Random String Generator</h1>"), "Response should contain the correct HTML title")
+	assert.True(t, strings.Contains(w.Body.String(), "Printable String"), "Response should contain Printable string")
+	assert.True(t, strings.Contains(w.Body.String(), "Alphanumeric String"), "Response should contain Alphanumeric string")
 }
