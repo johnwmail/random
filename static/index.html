@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random String Generator</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎲 Random String Generator</h1>
+        <p class="subtitle">Generate secure random strings instantly</p>
+        
+        <div class="string-card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span>🔒</span>
+                    <span>Printable String</span>
+                </div>
+                <div class="length-control">
+                    <span class="length-label">Length:</span>
+                    <input type="number" id="p" name="p" value="{{.PrintableLength}}" oninput="refreshStrings()" min="1" max="99">
+                </div>
+            </div>
+            <div class="string-display">
+                <span class="string-text" id="printable-string">{{.PrintableString}}</span>
+                <button class="copy-btn" id="copy-p" onclick="copyToClipboard('printable-string', 'copy-p')">Copy</button>
+            </div>
+        </div>
+
+        <div class="string-card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span>🔤</span>
+                    <span>Alphanumeric String</span>
+                </div>
+                <div class="length-control">
+                    <span class="length-label">Length:</span>
+                    <input type="number" id="a" name="a" value="{{.AlphanumericLength}}" oninput="refreshStrings()" min="1" max="99">
+                </div>
+            </div>
+            <div class="string-display">
+                <span class="string-text" id="alphanumeric-string">{{.AlphanumericString}}</span>
+                <button class="copy-btn" id="copy-a" onclick="copyToClipboard('alphanumeric-string', 'copy-a')">Copy</button>
+            </div>
+        </div>
+
+        <button class="refresh-btn" onclick="refreshStrings()">
+            <span class="icon">🔄</span>
+            <span>Generate New Strings</span>
+        </button>
+    </div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

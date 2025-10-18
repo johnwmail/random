@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"math/rand"
 	"net/http"
@@ -136,395 +137,25 @@ func generateStrings(c *gin.Context) {
 		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		c.IndentedJSON(http.StatusOK, response)
 	} else {
-		// Create a modern, responsive HTML string response
-		html := `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Random String Generator</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+		// Render HTML template with dynamic data
+		tmpl, err := template.ParseFiles("static/index.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Error loading template")
+			return
+		}
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            line-height: 1.6;
-        }
-
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 40px;
-            max-width: 600px;
-            width: 100%;
-            animation: fadeIn 0.5s ease-in;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        h1 {
-            color: #333;
-            font-size: 28px;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-
-        .subtitle {
-            color: #666;
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-
-        .string-card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .string-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .card-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #495057;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .length-control {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .length-label {
-            font-size: 14px;
-            color: #6c757d;
-        }
-
-        input[type=number] {
-            width: 60px;
-            padding: 8px 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            text-align: center;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-            background: white;
-        }
-
-        input[type=number]:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button {
-            opacity: 1;
-        }
-
-        .string-display {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            border: 2px solid #e0e0e0;
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            word-break: break-all;
-            color: #212529;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-        }
-
-        .string-text {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .copy-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .copy-btn:hover {
-            background: #5568d3;
-            transform: translateY(-1px);
-        }
-
-        .copy-btn:active {
-            transform: translateY(0);
-        }
-
-        .copy-btn.copied {
-            background: #10b981;
-        }
-
-        .refresh-btn {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .refresh-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .refresh-btn:active {
-            transform: translateY(0);
-        }
-
-        .icon {
-            display: inline-block;
-            width: 18px;
-            height: 18px;
-        }
-
-        @media (max-width: 600px) {
-            .container {
-                padding: 25px;
-            }
-
-            h1 {
-                font-size: 24px;
-            }
-
-            .card-header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .string-display {
-                font-size: 14px;
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .copy-btn {
-                width: 100%;
-            }
-        }
-
-
-    </style>
-    <script>
-        function refreshStrings() {
-            var printableLength = document.getElementById("p").value;
-            if (printableLength > 99) {
-                printableLength = 99;
-                document.getElementById("p").value = 99;
-            }
-            if (printableLength < 1) {
-                printableLength = 1;
-                document.getElementById("p").value = 1;
-            }
-            var alphanumericLength = document.getElementById("a").value;
-            if (alphanumericLength > 99) {
-                alphanumericLength = 99;
-                document.getElementById("a").value = 99;
-            }
-            if (alphanumericLength < 1) {
-                alphanumericLength = 1;
-                document.getElementById("a").value = 1;
-            }
-            var url = "/json?p=" + printableLength + "&a=" + alphanumericLength;
-            
-            fetch(url, {cache: 'no-store'})
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById("printable-string").textContent = data.printable.string;
-                    document.getElementById("alphanumeric-string").textContent = data.alphanumeric.string;
-                });
-        }
-
-        function copyToClipboard(elementId, buttonId) {
-            var text = document.getElementById(elementId).textContent;
-            var button = document.getElementById(buttonId);
-            
-            // Try modern clipboard API first
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(function() {
-                    showCopySuccess(button);
-                }).catch(function(err) {
-                    console.error('Clipboard API failed:', err);
-                    fallbackCopy(text, button);
-                });
-            } else {
-                // Fallback for older browsers or HTTP environments
-                fallbackCopy(text, button);
-            }
-        }
-
-        function showCopySuccess(button) {
-            var originalText = button.textContent;
-            button.textContent = '✓ Copied';
-            button.classList.add('copied');
-            
-            setTimeout(function() {
-                button.textContent = originalText;
-                button.classList.remove('copied');
-            }, 2000);
-        }
-
-        function fallbackCopy(text, button) {
-            // Check if execCommand is supported
-            if (!document.queryCommandSupported || !document.queryCommandSupported('copy')) {
-                button.textContent = '✗ Failed';
-                setTimeout(function() {
-                    button.textContent = 'Copy';
-                }, 2000);
-                return;
-            }
-
-            var textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.left = '-9999px';
-            textarea.style.top = '-9999px';
-            textarea.style.opacity = '0';
-            textarea.setAttribute('aria-hidden', 'true');
-            textarea.setAttribute('readonly', '');
-            
-            var added = false;
-            try {
-                document.body.appendChild(textarea);
-                added = true;
-                textarea.select();
-                
-                var successful = document.execCommand('copy');
-                if (successful) {
-                    showCopySuccess(button);
-                } else {
-                    button.textContent = '✗ Failed';
-                    setTimeout(function() {
-                        button.textContent = 'Copy';
-                    }, 2000);
-                }
-            } catch (err) {
-                console.error('Fallback copy failed:', err);
-                button.textContent = '✗ Failed';
-                setTimeout(function() {
-                    button.textContent = 'Copy';
-                }, 2000);
-            } finally {
-                if (added && textarea.parentNode) {
-                    document.body.removeChild(textarea);
-                }
-            }
-        }
-    </script>
-</head>
-<body>
-    <div class="container">
-        <h1>🎲 Random String Generator</h1>
-        <p class="subtitle">Generate secure random strings instantly</p>
-        
-        <div class="string-card">
-            <div class="card-header">
-                <div class="card-title">
-                    <span>🔒</span>
-                    <span>Printable String</span>
-                </div>
-                <div class="length-control">
-                    <span class="length-label">Length:</span>
-                    <input type="number" id="p" name="p" value="` + strconv.Itoa(printableLength) + `" oninput="refreshStrings()" min="1" max="99">
-                </div>
-            </div>
-            <div class="string-display">
-                <span class="string-text" id="printable-string">` + GenerateRandomPrintable(printableLength) + `</span>
-                <button class="copy-btn" id="copy-p" onclick="copyToClipboard('printable-string', 'copy-p')">Copy</button>
-            </div>
-        </div>
-
-        <div class="string-card">
-            <div class="card-header">
-                <div class="card-title">
-                    <span>🔤</span>
-                    <span>Alphanumeric String</span>
-                </div>
-                <div class="length-control">
-                    <span class="length-label">Length:</span>
-                    <input type="number" id="a" name="a" value="` + strconv.Itoa(alphanumericLength) + `" oninput="refreshStrings()" min="1" max="99">
-                </div>
-            </div>
-            <div class="string-display">
-                <span class="string-text" id="alphanumeric-string">` + GenerateRandomAlphanumeric(alphanumericLength) + `</span>
-                <button class="copy-btn" id="copy-a" onclick="copyToClipboard('alphanumeric-string', 'copy-a')">Copy</button>
-            </div>
-        </div>
-
-        <button class="refresh-btn" onclick="refreshStrings()">
-            <span class="icon">🔄</span>
-            <span>Generate New Strings</span>
-        </button>
-    </div>
-</body>
-</html>`
+		data := map[string]interface{}{
+			"PrintableLength":    printableLength,
+			"PrintableString":    GenerateRandomPrintable(printableLength),
+			"AlphanumericLength": alphanumericLength,
+			"AlphanumericString": GenerateRandomAlphanumeric(alphanumericLength),
+		}
 
 		c.Header("Content-Type", "text/html")
-		c.String(http.StatusOK, html)
+		err = tmpl.Execute(c.Writer, data)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Error rendering template")
+		}
 	}
 }
 
@@ -533,6 +164,9 @@ func main() {
 	// Initialize a local random source for non-deterministic output across cold starts
 	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 	r := gin.Default()
+
+	// Serve static files (CSS, JS)
+	r.Static("/static", "./static")
 
 	// Define the endpoints
 	r.GET("/json", generateStrings) // JSON response
