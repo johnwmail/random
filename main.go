@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"math/rand"
 	"net/http"
@@ -136,58 +137,25 @@ func generateStrings(c *gin.Context) {
 		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		c.IndentedJSON(http.StatusOK, response)
 	} else {
-		// Create a plain HTML string response
-		html := `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Generated Random Strings</title>
-	<style>
-		input[type=number] {
-			width: 50px;
-			text-align: center;
+		// Render HTML template with dynamic data
+		tmpl, err := template.ParseFiles("static/index.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Error loading template")
+			return
 		}
-	</style>
-    <script>
-        function refreshStrings() {
-            var printableLength = document.getElementById("p").value;
-            if (printableLength > 99) {
-                printableLength = 99;
-                document.getElementById("p").value = 99;
-            }
-            if (printableLength < 1) {
-                printableLength = 1;
-                document.getElementById("p").value = 1;
-            }
-            var alphanumericLength = document.getElementById("a").value;
-            if (alphanumericLength > 99) {
-                alphanumericLength = 99;
-                document.getElementById("a").value = 99;
-            }
-            if (alphanumericLength < 1) {
-                alphanumericLength = 1;
-                document.getElementById("a").value = 1;
-            }
-            var url = "/json?p=" + printableLength + "&a=" + alphanumericLength;
-            
-			fetch(url, {cache: 'no-store'})
-				.then(response => response.json())
-                .then(data => {
-                    document.getElementById("printable-string").textContent = data.printable.string;
-                    document.getElementById("alphanumeric-string").textContent = data.alphanumeric.string;
-                });
-        }
-    </script>
-</head>
-<body>
-    <h1>Generated Random Strings</h1>
-    <p>Printable: <input type="number" id="p" name="p" value="` + strconv.Itoa(printableLength) + `" oninput="refreshStrings()" min="1" max="99"> <span id="printable-string">` + GenerateRandomPrintable(printableLength) + `</span></p>
-    <p>Alphanumeric: <input type="number" id="a" name="a" value="` + strconv.Itoa(alphanumericLength) + `" oninput="refreshStrings()" min="1" max="99"> <span id="alphanumeric-string">` + GenerateRandomAlphanumeric(alphanumericLength) + `</span></p>
-</body>
-</html>`
+
+		data := map[string]interface{}{
+			"PrintableLength":    printableLength,
+			"PrintableString":    GenerateRandomPrintable(printableLength),
+			"AlphanumericLength": alphanumericLength,
+			"AlphanumericString": GenerateRandomAlphanumeric(alphanumericLength),
+		}
 
 		c.Header("Content-Type", "text/html")
-		c.String(http.StatusOK, html)
+		err = tmpl.Execute(c.Writer, data)
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Error rendering template")
+		}
 	}
 }
 
@@ -196,6 +164,9 @@ func main() {
 	// Initialize a local random source for non-deterministic output across cold starts
 	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 	r := gin.Default()
+
+	// Serve static files (CSS, JS)
+	r.Static("/static", "./static")
 
 	// Define the endpoints
 	r.GET("/json", generateStrings) // JSON response
