@@ -429,14 +429,30 @@ func generateStrings(c *gin.Context) {
         }
 
         function fallbackCopy(text, button) {
+            // Check if execCommand is supported
+            if (!document.queryCommandSupported || !document.queryCommandSupported('copy')) {
+                button.textContent = '✗ Failed';
+                setTimeout(function() {
+                    button.textContent = 'Copy';
+                }, 2000);
+                return;
+            }
+
             var textarea = document.createElement('textarea');
             textarea.value = text;
             textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            textarea.style.top = '-9999px';
             textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
+            textarea.setAttribute('aria-hidden', 'true');
+            textarea.setAttribute('readonly', '');
             
+            var added = false;
             try {
+                document.body.appendChild(textarea);
+                added = true;
+                textarea.select();
+                
                 var successful = document.execCommand('copy');
                 if (successful) {
                     showCopySuccess(button);
@@ -453,7 +469,9 @@ func generateStrings(c *gin.Context) {
                     button.textContent = 'Copy';
                 }, 2000);
             } finally {
-                document.body.removeChild(textarea);
+                if (added && textarea.parentNode) {
+                    document.body.removeChild(textarea);
+                }
             }
         }
     </script>
