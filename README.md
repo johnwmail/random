@@ -71,7 +71,7 @@ Required repo secrets (or configure OIDC role):
 Behavior:
 - Builds a Linux bootstrap binary for the custom runtime.
 - Prepares lambda-artifacts/ and deploys with handler=bootstrap, runtime=provided.al2, publish=true.
-Trigger: push to branch deploy/lambda.
+- Trigger: push to branch deploy/lambda.
 
 CI
 --
