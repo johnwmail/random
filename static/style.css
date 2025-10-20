@@ -265,7 +265,7 @@ h1 {
     text-decoration: none;
     display: inline-flex;
     gap: 0.5rem;
-    align-items: center
+    align-items: center;
 }
 
 .site-title svg {
