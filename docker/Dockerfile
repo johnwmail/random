@@ -16,6 +16,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 FROM scratch
 
 COPY --from=build ./random /
+COPY --from=build ./static /
 WORKDIR /
 USER 8080:8080
 EXPOSE 8080
