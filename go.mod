@@ -1,4 +1,4 @@
-module random
+module github.com/johnwmail/random
 
 go 1.24.5
 
