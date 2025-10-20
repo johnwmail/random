@@ -9,22 +9,13 @@
     <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
     <style>
         /* Ensure emoji render properly in all browsers */
-        * {
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
         }
 
-        /* Force emoji rendering for Chromium browsers */
-        h1,
-        button,
-        span,
-        .card-title {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji' !important;
-        }
-
         /* Specific emoji elements */
-        .icon,
-        h1 {
-            font-family: 'Segoe UI Emoji', 'Segoe UI Symbol', 'Apple Color Emoji', 'Noto Color Emoji', 'Android Emoji', 'EmojiSymbols', sans-serif !important;
+        .icon {
+            font-family: 'Segoe UI Emoji', 'Segoe UI Symbol', 'Apple Color Emoji', 'Noto Color Emoji', 'Android Emoji', 'EmojiSymbols', sans-serif;
         }
     </style>
 </head>
