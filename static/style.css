@@ -201,6 +201,12 @@ input[type=number]::-webkit-outer-spin-button {
     height: 18px;
 }
 
+/* SVG size modifier helpers (use on top of .icon) */
+.icon--lg { width: 1.8rem; height: 1.8rem; vertical-align: middle; }
+.icon--md { width: 1.35rem; height: 1.35rem; vertical-align: middle; }
+.icon--sm { width: 1.3rem; height: 1.3rem; vertical-align: middle; }
+.icon--xs { width: 1.25rem; height: 1.25rem; vertical-align: middle; }
+
 @media (max-width: 600px) {
     .container {
         padding: 25px;
