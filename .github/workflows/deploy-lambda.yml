@@ -1,15 +1,20 @@
-name: Deploy to AWS Lambda
+name: Build and Deploy to Lambda
 
 on:
   workflow_dispatch:
     inputs:
       function_name:
-        description: "Override Lambda function name (optional). If empty, uses secret LAMBDA_FUNCTION_NAME."
+        description: "Override Lambda function name (optional). If empty, uses LAMBDA_FUNCTION_NAME environment variable."
         required: false
         default: ""
+      goarch:
+        description: "Override GOARCH (amd64 or arm64). Default: amd64"
+        required: false
+        default: "amd64"
+        type: string
   push:
     branches:
-      - 'deploy/lambda'
+      - "deploy/lambda"
 
 jobs:
   deploy-lambda:
@@ -19,39 +24,70 @@ jobs:
       id-token: write
     env:
       GOOS: linux
-      GOARCH: amd64
       CGO_ENABLED: 0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history and tags
+
+      - name: Validate GOARCH input
+        run: |
+          GOARCH_INPUT="${{ github.event.inputs.goarch }}"
+          if [ -z "$GOARCH_INPUT" ]; then
+            GOARCH_INPUT="amd64"
+          fi
+          if [ "$GOARCH_INPUT" != "amd64" ] && [ "$GOARCH_INPUT" != "arm64" ]; then
+            echo "❌ Error: goarch input must be 'amd64' or 'arm64', got '$GOARCH_INPUT'" >&2
+            exit 1
+          fi
+          echo "GOARCH=$GOARCH_INPUT" >> $GITHUB_ENV
+          echo "✅ GOARCH set to $GOARCH_INPUT"
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
 
       - name: Download deps
         run: go mod download
 
+      - name: Set VERSION variable (tag or short SHA)
+        id: version
+        run: |
+          TAG=$(git describe --tags --exact-match 2>/dev/null || true)
+          if [ -n "$TAG" ]; then
+            VERSION="$TAG"
+          else
+            VERSION="sha-${GITHUB_SHA::7}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Using VERSION: $VERSION"
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
       - name: Build Lambda bootstrap
         run: |
-          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          COMMIT=${GITHUB_SHA}
-          VERSION=${GITHUB_REF_NAME}
-          go build -trimpath -ldflags "-s -w -X main.BuildTime=${BUILD_TIME} -X main.CommitHash=${COMMIT} -X main.Version=${VERSION}" -o bootstrap main.go
+          go build \
+            -ldflags "-s -w -X main.BuildTime=$(date --utc +%Y-%m-%dT%H:%M:%SZ) -X main.CommitHash=${{ github.sha }} -X main.Version=${VERSION}" \
+            -tags netgo -trimpath \
+            -o ./bootstrap .
 
       - name: Prepare code artifacts
         run: |
           mkdir -p lambda-artifacts
           mv -f bootstrap lambda-artifacts/bootstrap
-          ls -l lambda-artifacts
+          cp -r static lambda-artifacts/static
+          ls -la lambda-artifacts
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          audience: ${{ secrets.AWS_AUDIENCE }}
           aws-region: ${{ secrets.AWS_REGION }}
+          audience: ${{ secrets.AWS_AUDIENCE }}
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          #aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DEPLOY_LAMBDA }}
+          #aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_DEPLOY_LAMBDA }}
 
       - name: Resolve Lambda function name
         id: resolve-fn
@@ -63,11 +99,20 @@ jobs:
             exit 0
           fi
           if [ -z "${{ secrets.LAMBDA_FUNCTION_NAME }}" ]; then
-            echo "LAMBDA_FUNCTION_NAME secret is required when no manual input is provided" >&2
+            echo "LAMBDA_FUNCTION_NAME variable is required when no manual input is provided" >&2
             exit 1
           fi
           echo "Using function name from secret"
           echo "name=${{ secrets.LAMBDA_FUNCTION_NAME }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set Lambda architecture
+        id: set-arch
+        run: |
+          if [ "$GOARCH" = "arm64" ]; then
+            echo "arch=arm64" >> "$GITHUB_OUTPUT"
+          else
+            echo "arch=x86_64" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Deploy Lambda Function
         id: lambda-deploy
@@ -75,11 +120,16 @@ jobs:
         with:
           function-name: ${{ steps.resolve-fn.outputs.name }}
           code-artifacts-dir: lambda-artifacts
-          architectures: x86_64
+          architectures: ${{ steps.set-arch.outputs.arch }}
           runtime: provided.al2023
           handler: bootstrap
+          #timeout: 3
           publish: true
           role: ${{ secrets.LAMBDA_EXECUTION_ROLE }}
+          #s3-bucket: "${{ vars.S3_BUCKET }}"
+          environment: '{
+            "GIN_MODE":"${{ vars.GIN_MODE }}"
+          }'
 
       - name: Post-deploy info
         run: |
