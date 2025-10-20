@@ -210,6 +210,6 @@ func TestUserAgent_Browser_ReturnsHTML(t *testing.T) {
 	// look for a DOCTYPE or <html> in the response body
 	body := w.Body.String()
 	if !strings.Contains(body, "<!DOCTYPE html>") && !strings.Contains(body, "<html") {
-		t.Fatalf("expected HTML body for browser UA, got %s", body[:len(body)])
+		t.Fatalf("expected HTML body for browser UA, got %s", body)
 	}
 }
