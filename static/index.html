@@ -13,27 +13,29 @@
 <body>
     <div class="container">
         <h1>
-            <svg class="icon icon--lg" viewBox="0 0 32 32">
-                <path d="M16 5L27 11L16 17L5 11Z" fill="#fdfefe" stroke="#cfd8dc" stroke-width="1.2" />
-                <path d="M16 5L22.5 8.5L16 12L9.5 8.5Z" fill="#ffffff" opacity="0.6" />
-                <path d="M27 11V22L16 28V17Z" fill="#d5dce7" stroke="#b0bec5" stroke-width="1.2" />
-                <path d="M5 11V22L16 28V17Z" fill="#e9edf4" stroke="#b0bec5" stroke-width="1.2" />
-                <path d="M6 22L16 28L26 22" fill="none" stroke="#d0d7e2" stroke-width="1" />
-                <path d="M8 24L16 28L24 24" fill="none" stroke="#c5ccd8" stroke-width="0.8" opacity="0.6" />
-                <circle cx="16" cy="11.2" r="1.2" fill="#37474f" />
-                <circle cx="22" cy="16" r="1.15" fill="#37474f" />
-                <circle cx="22" cy="21" r="1.15" fill="#37474f" />
-                <circle cx="10" cy="16" r="1.15" fill="#37474f" />
-                <circle cx="12.4" cy="20" r="1.15" fill="#37474f" />
-                <circle cx="14.8" cy="24" r="1.15" fill="#37474f" />
-                <circle cx="15.4" cy="10.6" r="0.4" fill="#ffffff" opacity="0.65" />
-                <circle cx="21.2" cy="15.4" r="0.35" fill="#ffffff" opacity="0.55" />
-                <circle cx="21.2" cy="20.4" r="0.35" fill="#ffffff" opacity="0.55" />
-                <circle cx="9.2" cy="15.4" r="0.35" fill="#ffffff" opacity="0.55" />
-                <circle cx="11.6" cy="19.4" r="0.35" fill="#ffffff" opacity="0.55" />
-                <circle cx="14" cy="23.4" r="0.35" fill="#ffffff" opacity="0.55" />
-            </svg>
-            Random String Generator
+            <a class="site-title" href="https://github.com/johnwmail/random" target="_blank" rel="noopener noreferrer">
+                <svg class="icon icon--lg" viewBox="0 0 32 32">
+                    <path d="M16 5L27 11L16 17L5 11Z" fill="#fdfefe" stroke="#cfd8dc" stroke-width="1.2" />
+                    <path d="M16 5L22.5 8.5L16 12L9.5 8.5Z" fill="#ffffff" opacity="0.6" />
+                    <path d="M27 11V22L16 28V17Z" fill="#d5dce7" stroke="#b0bec5" stroke-width="1.2" />
+                    <path d="M5 11V22L16 28V17Z" fill="#e9edf4" stroke="#b0bec5" stroke-width="1.2" />
+                    <path d="M6 22L16 28L26 22" fill="none" stroke="#d0d7e2" stroke-width="1" />
+                    <path d="M8 24L16 28L24 24" fill="none" stroke="#c5ccd8" stroke-width="0.8" opacity="0.6" />
+                    <circle cx="16" cy="11.2" r="1.2" fill="#37474f" />
+                    <circle cx="22" cy="16" r="1.15" fill="#37474f" />
+                    <circle cx="22" cy="21" r="1.15" fill="#37474f" />
+                    <circle cx="10" cy="16" r="1.15" fill="#37474f" />
+                    <circle cx="12.4" cy="20" r="1.15" fill="#37474f" />
+                    <circle cx="14.8" cy="24" r="1.15" fill="#37474f" />
+                    <circle cx="15.4" cy="10.6" r="0.4" fill="#ffffff" opacity="0.65" />
+                    <circle cx="21.2" cy="15.4" r="0.35" fill="#ffffff" opacity="0.55" />
+                    <circle cx="21.2" cy="20.4" r="0.35" fill="#ffffff" opacity="0.55" />
+                    <circle cx="9.2" cy="15.4" r="0.35" fill="#ffffff" opacity="0.55" />
+                    <circle cx="11.6" cy="19.4" r="0.35" fill="#ffffff" opacity="0.55" />
+                    <circle cx="14" cy="23.4" r="0.35" fill="#ffffff" opacity="0.55" />
+                </svg>
+                Random String Generator
+            </a>
         </h1>
         <p class="subtitle">Generate secure random strings instantly</p>
 
@@ -94,13 +96,8 @@
             </svg>
             <span>Generate New Strings</span>
         </button>
-    </div>
-    <div class="site-footer">
-        <div class="box">
-            <a href="https://github.com/johnwmail/random" target="_blank" rel="noopener noreferrer">random - Open Source
-                Random String Generator</a>
-            <span class="ver">Version: {{.Version}}</span>
-        </div>
+
+        <div class="version-note">Version: {{.Version}}</div>
     </div>
     <script src="/static/app.js?v={{.Version}}"></script>
 </body>
