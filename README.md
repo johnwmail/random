@@ -118,6 +118,11 @@ Values outside 1–99 are clamped automatically.
 | GET | `/` | HTML UI with live length controls |
 | GET | `/json` | JSON payload describing both strings |
 
+Note on CLI clients
+-------------------
+
+By default the service will return JSON to programmatic or CLI clients (for example `curl`, `wget`, `powershell`, `httpie`, language HTTP libraries, etc.). This is detected using the `User-Agent` header. If you need to force HTML from a CLI client, request the `/` endpoint with an explicit `Accept: text/html` header or use a browser; to force JSON use `/json` or `Accept: application/json`.
+
 Sample JSON response:
 
 ```json
