@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -122,8 +123,22 @@ func generateStrings(c *gin.Context) {
 		alphanumericLength = 1
 	}
 
-	// Check the endpoint
-	if c.Request.URL.Path == "/json" {
+	// Detect CLI-like User-Agent (curl, wget, powershell, httpie, python-requests, etc.)
+	ua := strings.ToLower(c.GetHeader("User-Agent"))
+	isCLI := false
+	if ua != "" {
+		// Common CLI and programmatic clients
+		cliSignatures := []string{"curl", "wget", "powershell", "httpie", "python-requests", "python-urllib", "go-http-client", "fetch", "aria2", "http_client", "winhttp", "axios", "node-fetch"}
+		for _, sig := range cliSignatures {
+			if strings.Contains(ua, sig) {
+				isCLI = true
+				break
+			}
+		}
+	}
+
+	// If requested path is /json or the client appears to be a CLI, return JSON
+	if c.Request.URL.Path == "/json" || isCLI {
 		response := Response{
 			Printable: RandomString{
 				Length: printableLength,
