@@ -24,19 +24,79 @@ var ginLambdaV2 *ginadapter.GinLambdaV2
 
 // map of user-agent signatures considered CLI/programmatic clients for O(1) lookup
 var cliSignaturesMap = map[string]struct{}{
-	"curl":           {},
-	"wget":           {},
-	"powershell":     {},
-	"httpie":         {},
-	"python-requests":{},
-	"python-urllib":  {},
-	"go-http-client": {},
-	"fetch":          {},
-	"aria2":          {},
-	"http_client":    {},
-	"winhttp":        {},
-	"axios":          {},
-	"node-fetch":     {},
+	"curl":            {},
+	"wget":            {},
+	"powershell":      {},
+	"httpie":          {},
+	"python-requests": {},
+	"python-urllib":   {},
+	"go-http-client":  {},
+	"fetch":           {},
+	"aria2":           {},
+	"http_client":     {},
+	"winhttp":         {},
+	"axios":           {},
+	"node-fetch":      {},
+}
+
+// parseLengths extracts and clamps printable and alphanumeric lengths from the request
+func parseLengths(c *gin.Context) (int, int) {
+	printableLength := rand.Intn(19) + 12    // Random length between 12 and 30
+	alphanumericLength := rand.Intn(19) + 12 // Random length between 12 and 30
+
+	if val, ok := c.GetQuery("p"); ok {
+		if length, err := strconv.Atoi(val); err == nil {
+			printableLength = length
+		}
+	}
+	if val, ok := c.GetQuery("a"); ok {
+		if length, err := strconv.Atoi(val); err == nil {
+			alphanumericLength = length
+		}
+	}
+
+	if printableLength > 99 {
+		printableLength = 99
+	}
+	if printableLength < 1 {
+		printableLength = 1
+	}
+	if alphanumericLength > 99 {
+		alphanumericLength = 99
+	}
+	if alphanumericLength < 1 {
+		alphanumericLength = 1
+	}
+
+	return printableLength, alphanumericLength
+}
+
+// buildResponse creates the Response payload for JSON responses
+func buildResponse(printableLength, alphanumericLength int) Response {
+	return Response{
+		Printable: RandomString{
+			Length: printableLength,
+			String: GenerateRandomPrintable(printableLength),
+		},
+		AlphaNumeric: RandomString{
+			Length: alphanumericLength,
+			String: GenerateRandomAlphanumeric(alphanumericLength),
+		},
+	}
+}
+
+// isCLIUserAgent returns true when the provided user-agent string matches common CLI clients
+func isCLIUserAgent(ua string) bool {
+	ua = strings.ToLower(ua)
+	if ua == "" {
+		return false
+	}
+	for sig := range cliSignaturesMap {
+		if strings.Contains(ua, sig) {
+			return true
+		}
+	}
+	return false
 }
 
 // Version/build info (set via -ldflags at build time)
@@ -111,86 +171,38 @@ func GenerateRandomAlphanumeric(length int) string {
 }
 
 func generateStrings(c *gin.Context) {
-	// Default lengths for strings
-	printableLength := rand.Intn(19) + 12    // Random length between 12 and 30
-	alphanumericLength := rand.Intn(19) + 12 // Random length between 12 and 30
+	printableLength, alphanumericLength := parseLengths(c)
 
-	// Read query parameters
-	if val, ok := c.GetQuery("p"); ok {
-		if length, err := strconv.Atoi(val); err == nil {
-			printableLength = length
-		}
-	}
-	if val, ok := c.GetQuery("a"); ok {
-		if length, err := strconv.Atoi(val); err == nil {
-			alphanumericLength = length
-		}
-	}
-
-	if printableLength > 99 {
-		printableLength = 99
-	}
-	if printableLength < 1 {
-		printableLength = 1
-	}
-	if alphanumericLength > 99 {
-		alphanumericLength = 99
-	}
-	if alphanumericLength < 1 {
-		alphanumericLength = 1
-	}
-
-	// Detect CLI-like User-Agent (curl, wget, powershell, httpie, python-requests, etc.)
-	ua := strings.ToLower(c.GetHeader("User-Agent"))
-	isCLI := false
-	if ua != "" {
-		for _, sig := range cliSignatures {
-			if strings.Contains(ua, sig) {
-				isCLI = true
-				break
-			}
-		}
-	}
-
-	// If requested path is /json or the client appears to be a CLI, return JSON
-	if c.Request.URL.Path == "/json" || isCLI {
-		response := Response{
-			Printable: RandomString{
-				Length: printableLength,
-				String: GenerateRandomPrintable(printableLength),
-			},
-			AlphaNumeric: RandomString{
-				Length: alphanumericLength,
-				String: GenerateRandomAlphanumeric(alphanumericLength),
-			},
-		}
-		// avoid caching so UI updates always fetch fresh values
+	ua := c.GetHeader("User-Agent")
+	if c.Request.URL.Path == "/json" || isCLIUserAgent(ua) {
+		response := buildResponse(printableLength, alphanumericLength)
 		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		c.IndentedJSON(http.StatusOK, response)
-	} else {
-		// Render HTML template with dynamic data
-		tmpl, err := template.ParseFiles("static/index.html")
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error loading template")
-			return
-		}
+		return
+	}
 
-		data := map[string]interface{}{
-			"PrintableLength":    printableLength,
-			"PrintableString":    GenerateRandomPrintable(printableLength),
-			"AlphanumericLength": alphanumericLength,
-			"AlphanumericString": GenerateRandomAlphanumeric(alphanumericLength),
-			"Version":            Version,
-			"BuildTime":          BuildTime,
-			"CommitHash":         CommitHash,
-		}
+	// Render HTML template with dynamic data
+	tmpl, err := template.ParseFiles("static/index.html")
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Error loading template")
+		return
+	}
 
-		c.Header("Content-Type", "text/html; charset=utf-8")
-		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
-		err = tmpl.Execute(c.Writer, data)
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Error rendering template")
-		}
+	data := map[string]interface{}{
+		"PrintableLength":    printableLength,
+		"PrintableString":    GenerateRandomPrintable(printableLength),
+		"AlphanumericLength": alphanumericLength,
+		"AlphanumericString": GenerateRandomAlphanumeric(alphanumericLength),
+		"Version":            Version,
+		"BuildTime":          BuildTime,
+		"CommitHash":         CommitHash,
+	}
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+	err = tmpl.Execute(c.Writer, data)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Error rendering template")
 	}
 }
 
