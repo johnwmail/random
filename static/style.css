@@ -269,7 +269,7 @@ h1 {
 }
 
 .site-title svg {
-    opacity: 0.95
+    opacity: 0.95;
 }
 
 /* Make the dice/logo act like a small icon button next to the title */
