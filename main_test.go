@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-lambda-go/events"
+	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -70,7 +73,81 @@ func TestGenerateStringsHTML(t *testing.T) {
 
 	// Check the response
 	assert.Equal(t, http.StatusOK, w.Code, "HTTP status code should be 200")
-	assert.True(t, strings.Contains(w.Body.String(), "<h1>🎲 Random String Generator</h1>"), "Response should contain the correct HTML title")
-	assert.True(t, strings.Contains(w.Body.String(), "Printable String"), "Response should contain Printable string")
-	assert.True(t, strings.Contains(w.Body.String(), "Alphanumeric String"), "Response should contain Alphanumeric string")
+
+	body := w.Body.String()
+	assert.True(t, strings.Contains(body, "Random String Generator"), "Response should include the page headline text")
+	assert.True(t, strings.Contains(body, "<svg"), "Response should include inline SVG icons")
+	assert.True(t, strings.Contains(body, "Printable String"), "Response should contain Printable string")
+	assert.True(t, strings.Contains(body, "Alphanumeric String"), "Response should contain Alphanumeric string")
+}
+
+// TestAPIGatewayV1Event verifies the app handles API Gateway v1 events correctly
+func TestAPIGatewayV1Event(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
+	r.GET("/json", generateStrings)
+	ginLambda := ginadapter.New(r)
+
+	// Create a mock API Gateway v1 event
+	v1Event := events.APIGatewayProxyRequest{
+		HTTPMethod: "GET",
+		Path:       "/json",
+		QueryStringParameters: map[string]string{
+			"p": "15",
+			"a": "20",
+		},
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+		},
+	}
+
+	handler := &universalHandler{v1: ginLambda}
+	payload, err := json.Marshal(v1Event)
+	assert.NoError(t, err, "Should marshal v1 event successfully")
+
+	result, err := handler.tryAPIGatewayV1(context.Background(), payload)
+	assert.NoError(t, err, "Should handle v1 event without error")
+	assert.NotNil(t, result, "Should return a result")
+
+	var resp events.APIGatewayProxyResponse
+	err = json.Unmarshal(result, &resp)
+	assert.NoError(t, err, "Should unmarshal response successfully")
+	assert.Equal(t, 200, resp.StatusCode, "Should return 200 status code")
+}
+
+// TestAPIGatewayV2Event verifies the app handles API Gateway v2 events correctly
+func TestAPIGatewayV2Event(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
+	r.GET("/json", generateStrings)
+	ginLambdaV2 := ginadapter.NewV2(r)
+
+	// Create a mock API Gateway v2 event
+	v2Event := events.APIGatewayV2HTTPRequest{
+		Version:        "2.0",
+		RawPath:        "/json",
+		RawQueryString: "p=15&a=20",
+		Headers: map[string]string{
+			"content-type": "application/json",
+		},
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{
+				Method: "GET",
+				Path:   "/json",
+			},
+		},
+	}
+
+	handler := &universalHandler{v2: ginLambdaV2}
+	payload, err := json.Marshal(v2Event)
+	assert.NoError(t, err, "Should marshal v2 event successfully")
+
+	result, err := handler.tryAPIGatewayV2(context.Background(), payload)
+	assert.NoError(t, err, "Should handle v2 event without error")
+	assert.NotNil(t, result, "Should return a result")
+
+	var resp events.APIGatewayV2HTTPResponse
+	err = json.Unmarshal(result, &resp)
+	assert.NoError(t, err, "Should unmarshal response successfully")
+	assert.Equal(t, 200, resp.StatusCode, "Should return 200 status code")
 }

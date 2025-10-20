@@ -12,7 +12,7 @@ Features
   - `p` — printable string length (1–99)
   - `a` — alphanumeric string length (1–99)
 - Defaults: each length randomly chosen between 12 and 30 if not provided.
-- Version info embedded at build time and printed on start (version, buildTime, commitHash).
+- Version info embedded at build time and printed on start (Version, BuildTime, CommitHash).
 
 API
 ---

@@ -8,9 +8,9 @@ WORKDIR /src
 COPY . ./
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -tags=netgo -trimpath \
-       -ldflags="-w -s -X 'main.buildTime=$(date --utc +%Y-%m-%dT%H:%M:%SZ)' \
-       -X 'main.commitHash=$(git rev-parse HEAD)' \
-       -X 'main.version=${VERSION:-latest}'" \
+       -ldflags="-w -s -X 'main.BuildTime=$(date --utc +%Y-%m-%dT%H:%M:%SZ)' \
+       -X 'main.CommitHash=$(git rev-parse HEAD)' \
+       -X 'main.Version=${VERSION:-latest}'" \
        -v -o /random .
 
 FROM scratch

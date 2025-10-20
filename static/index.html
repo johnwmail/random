@@ -1,55 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Random String Generator</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
+    <style>
+        /* Ensure emoji render properly in all browsers */
+        * {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+        }
+
+        /* Force emoji rendering for Chromium browsers */
+        h1,
+        button,
+        span,
+        .card-title {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji' !important;
+        }
+
+        /* Specific emoji elements */
+        .icon,
+        h1 {
+            font-family: 'Segoe UI Emoji', 'Segoe UI Symbol', 'Apple Color Emoji', 'Noto Color Emoji', 'Android Emoji', 'EmojiSymbols', sans-serif !important;
+        }
+    </style>
 </head>
+
 <body>
     <div class="container">
-        <h1>🎲 Random String Generator</h1>
+        <h1>
+            <svg class="icon" viewBox="0 0 32 32"
+                style="width: 1.8rem; height: 1.8rem; display: inline-block; vertical-align: middle;">
+                <path d="M16 5L27 11L16 17L5 11Z" fill="#fdfefe" stroke="#cfd8dc" stroke-width="1.2" />
+                <path d="M16 5L22.5 8.5L16 12L9.5 8.5Z" fill="#ffffff" opacity="0.6" />
+                <path d="M27 11V22L16 28V17Z" fill="#d5dce7" stroke="#b0bec5" stroke-width="1.2" />
+                <path d="M5 11V22L16 28V17Z" fill="#e9edf4" stroke="#b0bec5" stroke-width="1.2" />
+                <path d="M6 22L16 28L26 22" fill="none" stroke="#d0d7e2" stroke-width="1" />
+                <path d="M8 24L16 28L24 24" fill="none" stroke="#c5ccd8" stroke-width="0.8" opacity="0.6" />
+                <circle cx="16" cy="11.2" r="1.2" fill="#37474f" />
+                <circle cx="22" cy="16" r="1.15" fill="#37474f" />
+                <circle cx="22" cy="21" r="1.15" fill="#37474f" />
+                <circle cx="10" cy="16" r="1.15" fill="#37474f" />
+                <circle cx="12.4" cy="20" r="1.15" fill="#37474f" />
+                <circle cx="14.8" cy="24" r="1.15" fill="#37474f" />
+                <circle cx="15.4" cy="10.6" r="0.4" fill="#ffffff" opacity="0.65" />
+                <circle cx="21.2" cy="15.4" r="0.35" fill="#ffffff" opacity="0.55" />
+                <circle cx="21.2" cy="20.4" r="0.35" fill="#ffffff" opacity="0.55" />
+                <circle cx="9.2" cy="15.4" r="0.35" fill="#ffffff" opacity="0.55" />
+                <circle cx="11.6" cy="19.4" r="0.35" fill="#ffffff" opacity="0.55" />
+                <circle cx="14" cy="23.4" r="0.35" fill="#ffffff" opacity="0.55" />
+            </svg>
+            Random String Generator
+        </h1>
         <p class="subtitle">Generate secure random strings instantly</p>
-        
+
         <div class="string-card">
             <div class="card-header">
                 <div class="card-title">
-                    <span>🔒</span>
+                    <svg class="icon" viewBox="0 0 32 32"
+                        style="width: 1.35rem; height: 1.35rem; display: inline-block; vertical-align: middle;">
+                        <path d="M10 12V9a6 6 0 1112 0v3" fill="none" stroke="#90a4ae" stroke-width="2"
+                            stroke-linecap="round" />
+                        <rect x="8" y="12" width="16" height="14" rx="3" fill="#ffeb3b" stroke="#f9a825"
+                            stroke-width="1.6" />
+                        <circle cx="16" cy="19" r="1.5" fill="#3e2723" />
+                        <rect x="15.2" y="19.8" width="1.6" height="3" rx="0.6" fill="#3e2723" />
+                    </svg>
                     <span>Printable String</span>
                 </div>
                 <div class="length-control">
                     <span class="length-label">Length:</span>
-                    <input type="number" id="p" name="p" value="{{.PrintableLength}}" oninput="refreshStrings()" min="1" max="99">
+                    <input type="number" id="p" name="p" value="{{.PrintableLength}}" oninput="refreshStrings()" min="1"
+                        max="99">
                 </div>
             </div>
             <div class="string-display">
                 <span class="string-text" id="printable-string">{{.PrintableString}}</span>
-                <button class="copy-btn" id="copy-p" onclick="copyToClipboard('printable-string', 'copy-p')">Copy</button>
+                <button class="copy-btn" id="copy-p"
+                    onclick="copyToClipboard('printable-string', 'copy-p')">Copy</button>
             </div>
         </div>
-
         <div class="string-card">
             <div class="card-header">
                 <div class="card-title">
-                    <span>🔤</span>
+                    <svg class="icon" viewBox="0 0 32 32"
+                        style="width: 1.3rem; height: 1.3rem; display: inline-block; vertical-align: middle;">
+                        <rect x="3" y="3" width="26" height="26" rx="6" fill="#bbdefb" stroke="#64b5f6"
+                            stroke-width="1.6" />
+                        <text x="16" y="19" text-anchor="middle" dominant-baseline="middle" fill="#1e3a8a"
+                            font-size="11" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+                            font-weight="600">abc</text>
+                    </svg>
                     <span>Alphanumeric String</span>
                 </div>
                 <div class="length-control">
                     <span class="length-label">Length:</span>
-                    <input type="number" id="a" name="a" value="{{.AlphanumericLength}}" oninput="refreshStrings()" min="1" max="99">
+                    <input type="number" id="a" name="a" value="{{.AlphanumericLength}}" oninput="refreshStrings()"
+                        min="1" max="99">
                 </div>
             </div>
             <div class="string-display">
                 <span class="string-text" id="alphanumeric-string">{{.AlphanumericString}}</span>
-                <button class="copy-btn" id="copy-a" onclick="copyToClipboard('alphanumeric-string', 'copy-a')">Copy</button>
+                <button class="copy-btn" id="copy-a"
+                    onclick="copyToClipboard('alphanumeric-string', 'copy-a')">Copy</button>
             </div>
         </div>
 
         <button class="refresh-btn" onclick="refreshStrings()">
-            <span class="icon">🔄</span>
+            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                style="width: 1.25rem; height: 1.25rem;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
             <span>Generate New Strings</span>
         </button>
     </div>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/app.js?v={{.Version}}"></script>
 </body>
+
 </html>

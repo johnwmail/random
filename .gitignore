@@ -8,6 +8,25 @@
 *.so
 *.dylib
 
+# Project specific binaries
+random
+random-*
+
+# Test coverage
+coverage.out
+coverage.html
+coverage.txt
+
+# Security scanning results
+results.sarif
+
+# Data directories
+pastes/
+data/
+
+# Logs
+*.log
+
 # Test binary, built with `go test -c`
 *.test
 
@@ -23,5 +42,11 @@ go.work
 # JetBrains IDEA
 .idea
 
-random
+*.log
+*.pid
 *.zip
+bootstrap
+main
+core.*
+.nfs.*
+

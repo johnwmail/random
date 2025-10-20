@@ -20,11 +20,12 @@ import (
 
 var ginLambda *ginadapter.GinLambda
 var ginLambdaV2 *ginadapter.GinLambdaV2
+
+// Version/build info (set via -ldflags at build time)
 var (
-	// Version information
-	version    string
-	buildTime  string
-	commitHash string
+	Version    = "dev"
+	BuildTime  = "unknown"
+	CommitHash = "none"
 )
 
 // local random source to avoid using the deprecated global seed
@@ -149,9 +150,13 @@ func generateStrings(c *gin.Context) {
 			"PrintableString":    GenerateRandomPrintable(printableLength),
 			"AlphanumericLength": alphanumericLength,
 			"AlphanumericString": GenerateRandomAlphanumeric(alphanumericLength),
+			"Version":            Version,
+			"BuildTime":          BuildTime,
+			"CommitHash":         CommitHash,
 		}
 
-		c.Header("Content-Type", "text/html")
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
 		err = tmpl.Execute(c.Writer, data)
 		if err != nil {
 			c.String(http.StatusInternalServerError, "Error rendering template")
@@ -172,10 +177,10 @@ func main() {
 	r.GET("/json", generateStrings) // JSON response
 	r.GET("/", generateStrings)     // HTML response
 
-	// print out the version, buildtime and commit hash
-	fmt.Printf("Version: %s\n", version)
-	fmt.Printf("Build Time: %s\n", buildTime)
-	fmt.Printf("Commit Hash: %s\n", commitHash)
+	// print out the Version, BuildTime and Commit Hash
+	fmt.Printf("Version: %s\n", Version)
+	fmt.Printf("Build Time: %s\n", BuildTime)
+	fmt.Printf("Commit Hash: %s\n", CommitHash)
 
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
 		// Running on AWS Lambda
@@ -197,19 +202,51 @@ type universalHandler struct {
 }
 
 func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
-	// Try API Gateway v2 (also covers Function URL once converted below)
+	// Try standard event types first
+	if result, err := h.tryAPIGatewayV2(ctx, payload); err == nil {
+		return result, nil
+	}
+	if result, err := h.tryLambdaFunctionURL(ctx, payload); err == nil {
+		return result, nil
+	}
+	if result, err := h.tryAPIGatewayV1(ctx, payload); err == nil {
+		return result, nil
+	}
+
+	// Permissive fallback for generic/non-standard payloads
+	if result, err := h.tryGenericPayload(ctx, payload); err == nil {
+		return result, nil
+	}
+
+	// Final fallback: route to /json as GET
+	return h.tryV1Fallback(ctx, payload)
+}
+
+// tryAPIGatewayV2 attempts to parse and handle an API Gateway v2 event.
+func (h *universalHandler) tryAPIGatewayV2(ctx context.Context, payload []byte) ([]byte, error) {
 	var v2req events.APIGatewayV2HTTPRequest
-	if err := json.Unmarshal(payload, &v2req); err == nil && (v2req.Version == "2.0" || v2req.RequestContext.HTTP.Method != "") {
+	if err := json.Unmarshal(payload, &v2req); err != nil {
+		return nil, err
+	}
+	// Accept if version is "2.0" OR if RequestContext has HTTP method
+	if v2req.Version == "2.0" || v2req.RequestContext.HTTP.Method != "" {
 		resp, err := h.v2.ProxyWithContext(ctx, v2req)
 		if err != nil {
 			return nil, err
 		}
 		return json.Marshal(resp)
 	}
+	return nil, fmt.Errorf("not v2")
+}
 
-	// Try Lambda Function URL event -> convert to APIGW v2 request
+// tryLambdaFunctionURL attempts to parse and handle a Lambda Function URL event.
+func (h *universalHandler) tryLambdaFunctionURL(ctx context.Context, payload []byte) ([]byte, error) {
 	var furl events.LambdaFunctionURLRequest
-	if err := json.Unmarshal(payload, &furl); err == nil && (furl.RawPath != "" || furl.RequestContext.HTTP.Method != "") {
+	if err := json.Unmarshal(payload, &furl); err != nil {
+		return nil, err
+	}
+	// Accept if RawPath is present OR if RequestContext has HTTP method
+	if furl.RawPath != "" || furl.RequestContext.HTTP.Method != "" {
 		converted := convertFunctionURLToV2(furl)
 		resp, err := h.v2.ProxyWithContext(ctx, converted)
 		if err != nil {
@@ -217,66 +254,68 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 		}
 		return json.Marshal(resp)
 	}
+	return nil, fmt.Errorf("not function url")
+}
 
-	// Fallback to API Gateway v1
+// tryAPIGatewayV1 attempts to parse and handle an API Gateway v1 event.
+func (h *universalHandler) tryAPIGatewayV1(ctx context.Context, payload []byte) ([]byte, error) {
 	var v1req events.APIGatewayProxyRequest
-	if err := json.Unmarshal(payload, &v1req); err == nil && (v1req.HTTPMethod != "" || v1req.Path != "" || v1req.RequestContext.RequestID != "") {
+	if err := json.Unmarshal(payload, &v1req); err != nil {
+		return nil, err
+	}
+	// Accept if HTTPMethod is present OR Path is present OR RequestID is present
+	if v1req.HTTPMethod != "" || v1req.Path != "" || v1req.RequestContext.RequestID != "" {
 		resp, err := h.v1.ProxyWithContext(ctx, v1req)
 		if err != nil {
 			return nil, err
 		}
-		// Sanitize for REST API proxy expectations: avoid null maps and set base64 flag explicitly.
-		if resp.Headers == nil {
-			resp.Headers = map[string]string{}
-		}
-		if resp.MultiValueHeaders == nil {
-			resp.MultiValueHeaders = map[string][]string{}
-		}
-		resp.IsBase64Encoded = false
+		resp = sanitizeV1Response(resp)
 		return json.Marshal(resp)
 	}
+	return nil, fmt.Errorf("not v1")
+}
 
-	// Permissive fallback: some console or custom test events use non-standard shapes.
-	// Try to coerce generic JSON payloads into v2 or v1 shapes by inspecting keys.
+// tryGenericPayload attempts to detect and handle non-standard generic payloads.
+func (h *universalHandler) tryGenericPayload(ctx context.Context, payload []byte) ([]byte, error) {
 	var generic map[string]interface{}
-	if err := json.Unmarshal(payload, &generic); err == nil {
-		// Detect v2-like (version = "2.0" or requestContext.http present)
-		if v, ok := generic["version"].(string); ok && v == "2.0" {
-			if b, err := json.Marshal(generic); err == nil {
-				var v2req events.APIGatewayV2HTTPRequest
-				if err := json.Unmarshal(b, &v2req); err == nil {
-					resp, err := h.v2.ProxyWithContext(ctx, v2req)
-					if err != nil {
-						return nil, err
-					}
-					return json.Marshal(resp)
-				}
-			}
-		}
+	if err := json.Unmarshal(payload, &generic); err != nil {
+		return nil, err
+	}
 
-		if _, hasHTTPMethod := generic["httpMethod"]; hasHTTPMethod || generic["path"] != nil || generic["resource"] != nil {
-			if b, err := json.Marshal(generic); err == nil {
-				var v1 events.APIGatewayProxyRequest
-				if err := json.Unmarshal(b, &v1); err == nil {
-					resp, err := h.v1.ProxyWithContext(ctx, v1)
-					if err != nil {
-						return nil, err
-					}
-					if resp.Headers == nil {
-						resp.Headers = map[string]string{}
-					}
-					if resp.MultiValueHeaders == nil {
-						resp.MultiValueHeaders = map[string][]string{}
-					}
-					resp.IsBase64Encoded = false
-					return json.Marshal(resp)
+	// Try to coerce to v2
+	if v, ok := generic["version"].(string); ok && v == "2.0" {
+		if b, err := json.Marshal(generic); err == nil {
+			var v2req events.APIGatewayV2HTTPRequest
+			if err := json.Unmarshal(b, &v2req); err == nil {
+				resp, err := h.v2.ProxyWithContext(ctx, v2req)
+				if err != nil {
+					return nil, err
 				}
+				return json.Marshal(resp)
 			}
 		}
 	}
 
-	// Final permissive fallback: forward raw payload as v1 POST / body so console tests succeed.
-	// This keeps the function usable from the Lambda console with arbitrary test events.
+	// Try to coerce to v1
+	if _, hasHTTPMethod := generic["httpMethod"]; hasHTTPMethod || generic["path"] != nil || generic["resource"] != nil {
+		if b, err := json.Marshal(generic); err == nil {
+			var v1req events.APIGatewayProxyRequest
+			if err := json.Unmarshal(b, &v1req); err == nil {
+				resp, err := h.v1.ProxyWithContext(ctx, v1req)
+				if err != nil {
+					return nil, err
+				}
+				resp = sanitizeV1Response(resp)
+				return json.Marshal(resp)
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("unable to coerce generic payload")
+}
+
+// tryV1Fallback handles arbitrary payloads by routing to /json GET.
+func (h *universalHandler) tryV1Fallback(ctx context.Context, payload []byte) ([]byte, error) {
 	v1fallback := events.APIGatewayProxyRequest{
 		Path:              "/json",
 		HTTPMethod:        "GET",
@@ -289,6 +328,12 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 	if err != nil {
 		return nil, fmt.Errorf("unable to coerce generic payload to v1 proxy: %w", err)
 	}
+	resp = sanitizeV1Response(resp)
+	return json.Marshal(resp)
+}
+
+// sanitizeV1Response ensures a v1 response has non-nil maps and base64 flag set correctly.
+func sanitizeV1Response(resp events.APIGatewayProxyResponse) events.APIGatewayProxyResponse {
 	if resp.Headers == nil {
 		resp.Headers = map[string]string{}
 	}
@@ -296,7 +341,7 @@ func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, 
 		resp.MultiValueHeaders = map[string][]string{}
 	}
 	resp.IsBase64Encoded = false
-	return json.Marshal(resp)
+	return resp
 }
 
 // convertFunctionURLToV2 maps a Lambda Function URL event to an APIGateway v2 HTTP request for the adapter.
