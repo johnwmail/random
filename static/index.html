@@ -13,7 +13,7 @@
 <body>
     <div class="container">
         <h1>
-            <a class="site-title" href="https://github.com/johnwmail/random" target="_blank" rel="noopener noreferrer">
+            <a class="site-title" href="/" aria-label="Home" title="Home" onclick="refreshNoCache(event)">
                 <svg class="icon icon--lg" viewBox="0 0 32 32">
                     <path d="M16 5L27 11L16 17L5 11Z" fill="#fdfefe" stroke="#cfd8dc" stroke-width="1.2" />
                     <path d="M16 5L22.5 8.5L16 12L9.5 8.5Z" fill="#ffffff" opacity="0.6" />
@@ -96,6 +96,11 @@
             </svg>
             <span>Generate New Strings</span>
         </button>
+
+        <div class="project-link">
+            <a href="https://github.com/johnwmail/random" target="_blank" rel="noopener noreferrer">Random String
+                Generater Project</a>
+        </div>
 
         <div class="version-note">Version: {{.Version}}</div>
     </div>

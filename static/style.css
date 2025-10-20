@@ -260,7 +260,69 @@ h1 {
 
 /* Footer */
 /* Site title (clickable) */
-.site-title { color: inherit; text-decoration: none; display: inline-flex; gap: 0.5rem; align-items: center }
-.site-title svg { opacity: 0.95 }
+.site-title {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center
+}
 
-.version-note { margin-top: 1rem; color: #97a0ad; font-size: 0.85rem; text-align: center }
+.site-title svg {
+    opacity: 0.95
+}
+
+/* Make the dice/logo act like a small icon button next to the title */
+.logo-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin-right: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.logo-btn:focus {
+    outline: 3px solid rgba(102, 126, 234, 0.15);
+    border-radius: 6px;
+}
+
+.version-note {
+    margin-top: 0.25rem;
+    color: #c6d9ea;
+    /* match the pale blue */
+    font-size: 0.85rem;
+    text-align: center;
+    font-weight: 500;
+}
+
+/* Project link shown above the version note */
+.project-link {
+    text-align: center;
+    margin-top: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+
+.project-link a {
+    color: #c6d9ea;
+    /* very pale blue like the screenshot */
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: 0.2px;
+    border-bottom: 1px solid transparent;
+    padding-bottom: 2px;
+    transition: color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.project-link a:hover {
+    color: #9fbfe0;
+    border-color: rgba(159, 191, 224, 0.18);
+    transform: translateY(-1px);
+}
+
+.project-link a:active {
+    transform: translateY(0);
+}
