@@ -22,6 +22,23 @@ import (
 var ginLambda *ginadapter.GinLambda
 var ginLambdaV2 *ginadapter.GinLambdaV2
 
+// list of user-agent signatures considered CLI/programmatic clients
+var cliSignatures = []string{
+	"curl",
+	"wget",
+	"powershell",
+	"httpie",
+	"python-requests",
+	"python-urllib",
+	"go-http-client",
+	"fetch",
+	"aria2",
+	"http_client",
+	"winhttp",
+	"axios",
+	"node-fetch",
+}
+
 // Version/build info (set via -ldflags at build time)
 var (
 	Version    = "dev"
@@ -127,8 +144,6 @@ func generateStrings(c *gin.Context) {
 	ua := strings.ToLower(c.GetHeader("User-Agent"))
 	isCLI := false
 	if ua != "" {
-		// Common CLI and programmatic clients
-		cliSignatures := []string{"curl", "wget", "powershell", "httpie", "python-requests", "python-urllib", "go-http-client", "fetch", "aria2", "http_client", "winhttp", "axios", "node-fetch"}
 		for _, sig := range cliSignatures {
 			if strings.Contains(ua, sig) {
 				isCLI = true
