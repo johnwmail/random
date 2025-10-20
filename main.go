@@ -22,21 +22,21 @@ import (
 var ginLambda *ginadapter.GinLambda
 var ginLambdaV2 *ginadapter.GinLambdaV2
 
-// list of user-agent signatures considered CLI/programmatic clients
-var cliSignatures = []string{
-	"curl",
-	"wget",
-	"powershell",
-	"httpie",
-	"python-requests",
-	"python-urllib",
-	"go-http-client",
-	"fetch",
-	"aria2",
-	"http_client",
-	"winhttp",
-	"axios",
-	"node-fetch",
+// map of user-agent signatures considered CLI/programmatic clients for O(1) lookup
+var cliSignaturesMap = map[string]struct{}{
+	"curl":           {},
+	"wget":           {},
+	"powershell":     {},
+	"httpie":         {},
+	"python-requests":{},
+	"python-urllib":  {},
+	"go-http-client": {},
+	"fetch":          {},
+	"aria2":          {},
+	"http_client":    {},
+	"winhttp":        {},
+	"axios":          {},
+	"node-fetch":     {},
 }
 
 // Version/build info (set via -ldflags at build time)
