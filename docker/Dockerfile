@@ -15,8 +15,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 
 FROM scratch
 
-COPY --from=build /static /static
-COPY --from=build ./random /random
+# copy static assets from build stage (they live at /src/static inside the build stage)
+COPY --from=build /src/static /static
+# copy the compiled binary placed at /random in the build stage
+COPY --from=build /random /random
 WORKDIR /
 USER 8080:8080
 EXPOSE 8080
