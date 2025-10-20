@@ -244,20 +244,19 @@ type universalHandler struct {
 }
 
 func (h *universalHandler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
-	// Try standard event types first
-	if result, err := h.tryAPIGatewayV2(ctx, payload); err == nil {
-		return result, nil
-	}
-	if result, err := h.tryLambdaFunctionURL(ctx, payload); err == nil {
-		return result, nil
-	}
-	if result, err := h.tryAPIGatewayV1(ctx, payload); err == nil {
-		return result, nil
+	// Define event handlers in order of preference
+	handlers := []func(context.Context, []byte) ([]byte, error){
+		h.tryAPIGatewayV2,
+		h.tryLambdaFunctionURL,
+		h.tryAPIGatewayV1,
+		h.tryGenericPayload,
 	}
 
-	// Permissive fallback for generic/non-standard payloads
-	if result, err := h.tryGenericPayload(ctx, payload); err == nil {
-		return result, nil
+	// Try each handler in sequence
+	for _, handler := range handlers {
+		if result, err := handler(ctx, payload); err == nil {
+			return result, nil
+		}
 	}
 
 	// Final fallback: route to /json as GET
@@ -324,36 +323,66 @@ func (h *universalHandler) tryGenericPayload(ctx context.Context, payload []byte
 		return nil, err
 	}
 
-	// Try to coerce to v2
-	if v, ok := generic["version"].(string); ok && v == "2.0" {
-		if b, err := json.Marshal(generic); err == nil {
-			var v2req events.APIGatewayV2HTTPRequest
-			if err := json.Unmarshal(b, &v2req); err == nil {
-				resp, err := h.v2.ProxyWithContext(ctx, v2req)
-				if err != nil {
-					return nil, err
-				}
-				return json.Marshal(resp)
-			}
-		}
+	// Try v2 coercion first
+	if result, err := h.coerceToV2(ctx, generic); err == nil {
+		return result, nil
 	}
 
-	// Try to coerce to v1
-	if _, hasHTTPMethod := generic["httpMethod"]; hasHTTPMethod || generic["path"] != nil || generic["resource"] != nil {
-		if b, err := json.Marshal(generic); err == nil {
-			var v1req events.APIGatewayProxyRequest
-			if err := json.Unmarshal(b, &v1req); err == nil {
-				resp, err := h.v1.ProxyWithContext(ctx, v1req)
-				if err != nil {
-					return nil, err
-				}
-				resp = sanitizeV1Response(resp)
-				return json.Marshal(resp)
-			}
-		}
+	// Try v1 coercion
+	if result, err := h.coerceToV1(ctx, generic); err == nil {
+		return result, nil
 	}
 
 	return nil, fmt.Errorf("unable to coerce generic payload")
+}
+
+// coerceToV2 attempts to convert generic payload to API Gateway v2 format
+func (h *universalHandler) coerceToV2(ctx context.Context, generic map[string]interface{}) ([]byte, error) {
+	v, ok := generic["version"].(string)
+	if !ok || v != "2.0" {
+		return nil, fmt.Errorf("not v2 format")
+	}
+
+	b, err := json.Marshal(generic)
+	if err != nil {
+		return nil, err
+	}
+
+	var v2req events.APIGatewayV2HTTPRequest
+	if err := json.Unmarshal(b, &v2req); err != nil {
+		return nil, err
+	}
+
+	resp, err := h.v2.ProxyWithContext(ctx, v2req)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(resp)
+}
+
+// coerceToV1 attempts to convert generic payload to API Gateway v1 format
+func (h *universalHandler) coerceToV1(ctx context.Context, generic map[string]interface{}) ([]byte, error) {
+	_, hasHTTPMethod := generic["httpMethod"]
+	if !hasHTTPMethod && generic["path"] == nil && generic["resource"] == nil {
+		return nil, fmt.Errorf("not v1 format")
+	}
+
+	b, err := json.Marshal(generic)
+	if err != nil {
+		return nil, err
+	}
+
+	var v1req events.APIGatewayProxyRequest
+	if err := json.Unmarshal(b, &v1req); err != nil {
+		return nil, err
+	}
+
+	resp, err := h.v1.ProxyWithContext(ctx, v1req)
+	if err != nil {
+		return nil, err
+	}
+	resp = sanitizeV1Response(resp)
+	return json.Marshal(resp)
 }
 
 // tryV1Fallback handles arbitrary payloads by routing to /json GET.
