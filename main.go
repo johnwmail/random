@@ -39,6 +39,8 @@ var cliSignaturesMap = map[string]struct{}{
 	"node-fetch":      {},
 }
 
+const MaxAllowedLength = 1000
+
 // parseLengths extracts and clamps printable and alphanumeric lengths from the request
 func parseLengths(c *gin.Context) (int, int) {
 	printableLength := rand.Intn(19) + 12    // Random length between 12 and 30
@@ -132,6 +134,9 @@ func GenerateRandomPrintable(length int) string {
 	if length <= 0 {
 		return ""
 	}
+	if length > MaxAllowedLength {
+		length = MaxAllowedLength
+	}
 
 	// First, generate a standard alphanumeric string.
 	result := GenerateRandomAlphanumeric(length)
@@ -162,6 +167,12 @@ func GenerateRandomPrintable(length int) string {
 
 // Function to generate random alphanumeric string
 func GenerateRandomAlphanumeric(length int) string {
+	if length <= 0 {
+		return ""
+	}
+	if length > MaxAllowedLength {
+		length = MaxAllowedLength
+	}
 	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	result := make([]rune, length)
 	for i := range result {
