@@ -18,6 +18,10 @@ jobs:
   build-and-publish:
     name: Build and Push Container
     runs-on: ubuntu-latest
+    outputs:
+      # If triggered by a git tag (refs/tags/*) prefer the raw git tag (e.g. v2.0),
+      # otherwise fall back to the semantic version produced by docker/metadata-action
+      image_tag: ${{ github.ref_type == 'tag' && github.ref_name || steps.meta.outputs.version }}
 
     steps:
       - name: Checkout code
@@ -47,6 +51,12 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && 'type=raw,value=latest' || 'type=ref,event=branch' }}
 
+      - name: Debug metadata outputs
+        run: |
+          echo "meta.tags=${{ steps.meta.outputs.tags }}"
+          echo "meta.version=${{ steps.meta.outputs.version }}"
+          echo "ref_type=${{ github.ref_type }} ref_name=${{ github.ref_name }}"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -54,7 +64,8 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -83,7 +94,8 @@ jobs:
       contents: read
       packages: read
     env:
-      IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+      # Use the tag/version produced by docker/metadata-action from the build job
+      IMAGE: ghcr.io/${{ github.repository }}:${{ needs.build-and-publish.outputs.image_tag }}
     steps:
       - name: Log in to GHCR
         uses: docker/login-action@v3
