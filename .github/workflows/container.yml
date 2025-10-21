@@ -19,9 +19,9 @@ jobs:
     name: Build and Push Container
     runs-on: ubuntu-latest
     outputs:
-      # If triggered by a git tag (refs/tags/*) prefer the raw git tag (e.g. v2.0),
-      # otherwise fall back to the semantic version produced by docker/metadata-action
-      image_tag: ${{ github.ref_type == 'tag' && github.ref_name || steps.meta.outputs.version }}
+      # Use the semantic version produced by docker/metadata-action so the verifier
+      # pulls the tag that was actually pushed (e.g., 2.0, 2.0.1)
+      image_tag: ${{ steps.meta.outputs.version }}
 
     steps:
       - name: Checkout code
@@ -64,8 +64,7 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
