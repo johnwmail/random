@@ -2,16 +2,16 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -41,10 +41,22 @@ var cliSignaturesMap = map[string]struct{}{
 
 const MaxAllowedLength = 100
 
+// cryptoRandInt generates a cryptographically secure random integer in the range [0, max)
+func cryptoRandInt(max int) int {
+	if max <= 0 {
+		return 0
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		log.Fatalf("crypto/rand failed: %v", err)
+	}
+	return int(n.Int64())
+}
+
 // parseLengths extracts and clamps printable and alphanumeric lengths from the request
 func parseLengths(c *gin.Context) (int, int) {
-	printableLength := rand.Intn(19) + 12    // Random length between 12 and 30
-	alphanumericLength := rand.Intn(19) + 12 // Random length between 12 and 30
+	printableLength := cryptoRandInt(19) + 12    // Random length between 12 and 30
+	alphanumericLength := cryptoRandInt(19) + 12 // Random length between 12 and 30
 
 	if val, ok := c.GetQuery("p"); ok {
 		if length, err := strconv.Atoi(val); err == nil {
@@ -108,15 +120,6 @@ var (
 	CommitHash = "none"
 )
 
-// local random source to avoid using the deprecated global seed
-var rnd *rand.Rand
-
-func init() {
-	if rnd == nil {
-		rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
-	}
-}
-
 // RandomString struct for individual random strings
 type RandomString struct {
 	Length int    `json:"length"`
@@ -146,7 +149,7 @@ func GenerateRandomPrintable(length int) string {
 	specialChars := []rune("!#$%*+-=?@^_")
 
 	// Determine how many characters to replace (1 to 3, but not more than the string length).
-	numReplacements := rnd.Intn(3) + 1
+	numReplacements := cryptoRandInt(3) + 1
 	if numReplacements >= length {
 		numReplacements = 1
 	}
@@ -158,8 +161,8 @@ func GenerateRandomPrintable(length int) string {
 
 	// Replace characters at random positions.
 	for i := 0; i < numReplacements; i++ {
-		pos := rnd.Intn(length)
-		runes[pos] = specialChars[rnd.Intn(len(specialChars))]
+		pos := cryptoRandInt(length)
+		runes[pos] = specialChars[cryptoRandInt(len(specialChars))]
 	}
 
 	return string(runes)
@@ -176,7 +179,7 @@ func GenerateRandomAlphanumeric(length int) string {
 	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	result := make([]rune, length)
 	for i := range result {
-		result[i] = letters[rnd.Intn(len(letters))]
+		result[i] = letters[cryptoRandInt(len(letters))]
 	}
 	return string(result)
 }
@@ -219,8 +222,6 @@ func generateStrings(c *gin.Context) {
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
-	// Initialize a local random source for non-deterministic output across cold starts
-	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 	r := gin.Default()
 
 	// Serve static files (CSS, JS)
