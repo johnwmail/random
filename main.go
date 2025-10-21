@@ -39,7 +39,7 @@ var cliSignaturesMap = map[string]struct{}{
 	"node-fetch":      {},
 }
 
-const MaxAllowedLength = 1000
+const MaxAllowedLength = 100
 
 // parseLengths extracts and clamps printable and alphanumeric lengths from the request
 func parseLengths(c *gin.Context) (int, int) {
