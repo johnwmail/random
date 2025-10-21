@@ -1,22 +1,21 @@
-
 name: Release
 
 on:
   push:
-    tags: [ 'v*' ]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g., v0.3)'
+        description: "Release tag (e.g., v0.3)"
         required: false
-        default: ''
+        default: ""
       changelog:
-        description: 'Custom changelog message'
+        description: "Custom changelog message"
         required: false
-        default: ''
+        default: ""
 
 env:
-  GO_VERSION: '1.24'  # Go version for builds
+  GO_VERSION: "1.24" # Go version for builds
 
 permissions:
   contents: write
@@ -26,158 +25,243 @@ jobs:
   build:
     name: Build Binaries
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         goos: [linux]
         goarch: [amd64, arm64]
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Clean Go modules directory
-      run: rm -rf ~/go/pkg/mod
-      continue-on-error: true
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-${{ env.GO_VERSION }}-
-          
-    - name: Build binary
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
-        CGO_ENABLED: 0
-      run: |
-        BINARY_NAME=random
-        
-        VERSION=${GITHUB_REF#refs/tags/}
-        
-        # Ensure dist directory exists
-        mkdir -p dist
-        
-        echo "Building $BINARY_NAME for $GOOS/$GOARCH..."
-        go build -v \
-          -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.CommitHash=${GITHUB_SHA:0:7}" \
-          -o "dist/${BINARY_NAME}_${GOOS}_${GOARCH}" \
-          .
-          
-    - name: Create archive
-      run: |
-        cd dist/
-        echo "Files in dist directory:"
-        ls -la
-        for file in *; do
-          echo "Checking: $file"
-          echo "Type: $(file "$file")"
-          if [ -f "$file" ]; then
-            # Create a temporary directory for packaging
-            pkg_dir="package_${file}"
-            echo "Processing binary file: $file -> package directory: $pkg_dir"
-            
-            # Remove directory if it exists to avoid conflicts
-            rm -rf "$pkg_dir"
-            
-            mkdir "$pkg_dir"
-            # Copy the binary and rename it to generic 'random'
-            cp "$file" "$pkg_dir/random"
-            cp -r ../static "$pkg_dir/"
-            tar -czf "${file}.tar.gz" "$pkg_dir"
-            rm -rf "$pkg_dir"
-            echo "Created archive: ${file}.tar.gz"
-          else
-            echo "Skipping $file (not a regular file)"
+      - name: Clean Go modules directory
+        run: rm -rf ~/go/pkg/mod
+        continue-on-error: true
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ env.GO_VERSION }}-
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          BINARY_NAME=random
+
+          VERSION=${GITHUB_REF#refs/tags/}
+
+          # Ensure dist directory exists
+          mkdir -p dist
+
+          echo "Building $BINARY_NAME for $GOOS/$GOARCH..."
+          go build -v \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.CommitHash=${GITHUB_SHA:0:7}" \
+            -o "dist/${BINARY_NAME}_${GOOS}_${GOARCH}" \
+            .
+
+      - name: Create archive
+        run: |
+          cd dist/
+          echo "Files in dist directory:"
+          ls -la
+          for file in *; do
+            echo "Checking: $file"
+            echo "Type: $(file "$file")"
+            if [ -f "$file" ]; then
+              # Create a temporary directory for packaging
+              pkg_dir="package_${file}"
+              echo "Processing binary file: $file -> package directory: $pkg_dir"
+              
+              # Remove directory if it exists to avoid conflicts
+              rm -rf "$pkg_dir"
+              
+              mkdir "$pkg_dir"
+              # Copy the binary and rename it to generic 'random'
+              cp "$file" "$pkg_dir/random"
+              cp -r ../static "$pkg_dir/"
+              tar -czf "${file}.tar.gz" "$pkg_dir"
+              rm -rf "$pkg_dir"
+              echo "Created archive: ${file}.tar.gz"
+            else
+              echo "Skipping $file (not a regular file)"
+            fi
+          done
+          echo "Final archives:"
+          ls -la *.tar.gz
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: random-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+          retention-days: 90
+
+  runtime-verify:
+    name: Runtime verify (smoke test)
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Find amd64 archive
+        id: find_archive
+        run: |
+          set -euo pipefail
+          echo "Looking for amd64 build archive in artifacts/"
+          ARCHIVE=$(find artifacts/ -type f -name "*linux_amd64*.tar.gz" | head -n1 || true)
+          if [ -z "$ARCHIVE" ]; then
+            echo "No linux/amd64 archive found. Listing artifacts for debugging:"
+            find artifacts/ -type f -maxdepth 3 -print
+            exit 1
           fi
-        done
-        echo "Final archives:"
-        ls -la *.tar.gz
-        
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: random-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: dist/
-        retention-days: 90
+          echo "archive=$ARCHIVE" >> $GITHUB_OUTPUT
+
+      - name: Extract archive
+        run: |
+          set -euo pipefail
+          mkdir -p verify
+          tar -xzf "${{ steps.find_archive.outputs.archive }}" -C verify
+          ls -la verify
+
+      - name: Install jq
+        run: sudo apt-get update -y && sudo apt-get install -y jq
+
+      - name: Run server in background and smoke test
+        env:
+          URL: "http://localhost:8080/json?a=22&p=33"
+          EXPECT_A_LEN: "22"
+          EXPECT_P_LEN: "33"
+        run: |
+          set -euo pipefail
+          chmod +x verify/*/random || true
+          # Find the binary we packaged as 'random'
+          BINARY=$(find verify -type f -name random | head -n1)
+          if [ -z "$BINARY" ]; then
+            echo "binary not found in verify/"
+            find verify -maxdepth 4 -print
+            exit 1
+          fi
+          echo "Starting binary: $BINARY"
+          # Start server on localhost
+          nohup "$BINARY" > server.log 2>&1 &
+          PID=$!
+          echo "server pid=$PID"
+
+          # Wait for server to start (max 15s)
+          for i in {1..15}; do
+            if curl -sSf "http://localhost:8080/json" > /dev/null 2>&1; then
+              echo "server is responding"
+              break
+            fi
+            sleep 1
+          done
+
+          # Smoke test the /json endpoint and output a short snippet
+          RESP=$(curl -fsS "$URL")
+          echo "Response: $RESP"
+          # Measure lengths of the returned strings
+          A_LEN=$(echo "$RESP" | jq -r '.alphanumeric.string | length')
+          P_LEN=$(echo "$RESP" | jq -r '.printable.string | length')
+          echo "Computed lengths -> alphanumeric: $A_LEN, printable: $P_LEN"
+          if [ "$A_LEN" != "$EXPECT_A_LEN" ]; then
+            echo "Expected alphanumeric length $EXPECT_A_LEN, got $A_LEN" >&2
+            exit 1
+          fi
+          if [ "$P_LEN" != "$EXPECT_P_LEN" ]; then
+            echo "Expected printable length $EXPECT_P_LEN, got $P_LEN" >&2
+            exit 1
+          fi
+
+          # Kill server
+          kill $PID || true
+          sleep 1
 
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build]
-    
+    needs: [build, runtime-verify]
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts/
-        
-    - name: Prepare release assets
-      run: |
-        mkdir -p release/
-        find artifacts/ -name "*.tar.gz" | while read file; do
-          cp "$file" release/
-        done
-        cd release/
-        ls -la
-        
-    - name: Generate changelog
-      id: changelog
-      run: |
-        # Use input tag if provided, else use GITHUB_REF
-        CURRENT_TAG="${{ github.event.inputs.tag }}"
-        if [ -z "$CURRENT_TAG" ]; then
-          CURRENT_TAG=${GITHUB_REF#refs/tags/}
-        fi
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
 
-        if [ -n "${{ github.event.inputs.changelog }}" ]; then
-          echo "${{ github.event.inputs.changelog }}" > changelog.md
-        elif [ -n "$PREVIOUS_TAG" ]; then
-          echo "## Changes since $PREVIOUS_TAG" > changelog.md
-          git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..$CURRENT_TAG >> changelog.md
-        else
-          echo "## Initial Release" > changelog.md
-          git log --pretty=format:"* %s (%h)" >> changelog.md
-        fi
+      - name: Prepare release assets
+        run: |
+          mkdir -p release/
+          find artifacts/ -name "*.tar.gz" | while read file; do
+            cp "$file" release/
+          done
+          cd release/
+          ls -la
 
-        # Write output to GITHUB_OUTPUT using a temp file for multi-line output (recommended)
-        {
-          echo "changelog<<EOF"
-          cat changelog.md
-          echo ""
-          echo "EOF"
-        } > temp_changelog_output.txt
-        echo "--- temp_changelog_output.txt contents ---"
-        cat temp_changelog_output.txt
-        echo "-----------------------------------------"
-        cat temp_changelog_output.txt >> $GITHUB_OUTPUT
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Use input tag if provided, else use GITHUB_REF
+          CURRENT_TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$CURRENT_TAG" ]; then
+            CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          fi
 
-        
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: release/*
-        body: ${{ steps.changelog.outputs.changelog }}
-        draft: false
-        tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-        prerelease: ${{ contains(github.event.inputs.tag || github.ref, '-rc') || contains(github.event.inputs.tag || github.ref, '-beta') || contains(github.event.inputs.tag || github.ref, '-alpha') }}
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+
+          if [ -n "${{ github.event.inputs.changelog }}" ]; then
+            echo "${{ github.event.inputs.changelog }}" > changelog.md
+          elif [ -n "$PREVIOUS_TAG" ]; then
+            echo "## Changes since $PREVIOUS_TAG" > changelog.md
+            git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..$CURRENT_TAG >> changelog.md
+          else
+            echo "## Initial Release" > changelog.md
+            git log --pretty=format:"* %s (%h)" >> changelog.md
+          fi
+
+          # Write output to GITHUB_OUTPUT using a temp file for multi-line output (recommended)
+          {
+            echo "changelog<<EOF"
+            cat changelog.md
+            echo ""
+            echo "EOF"
+          } > temp_changelog_output.txt
+          echo "--- temp_changelog_output.txt contents ---"
+          cat temp_changelog_output.txt
+          echo "-----------------------------------------"
+          cat temp_changelog_output.txt >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          prerelease: ${{ contains(github.event.inputs.tag || github.ref, '-rc') || contains(github.event.inputs.tag || github.ref, '-beta') || contains(github.event.inputs.tag || github.ref, '-alpha') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
