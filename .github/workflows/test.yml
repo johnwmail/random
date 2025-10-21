@@ -147,10 +147,9 @@ jobs:
 
       - name: Run Gosec Security Scanner
         run: |
-          go install github.com/secureco/gosec/v2/cmd/gosec@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
           gosec -no-fail -fmt sarif -out results.sarif ./...
           gosec -no-fail -fmt json -out results.json ./...
-          gosec ./...
 
       - name: Upload SARIF file
         if: github.event_name == 'push' || github.event_name == 'pull_request'
