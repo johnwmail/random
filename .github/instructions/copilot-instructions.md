@@ -174,7 +174,7 @@ This prevents silent truncation while being accurate for both direct POST and mu
 
 ### Platform-Specific Buffer Size Limits ⚠️
 
-- Write unit tests in `main_test.go` for string generation functions**CRITICAL**: When deploying Nclip, consider platform-specific limits beyond the application-level `NCLIP_BUFFER_SIZE`. See deployment-specific documentation for details:
+- Write unit tests in `main_test.go` for string generation functions
 
 - Test length clamping (edge cases: 0, 1, 99, 100)- **Lambda deployments**: Refer to `Documents/LAMBDA.md` for AWS Lambda 6MB payload limits
 
@@ -216,8 +216,6 @@ func TestGenerateRandomAlphanumeric(t *testing.T) {- Detection via User-Agent st
 
 - Run unit tests with `go test ./...` to verify functionality
 
-- Use `html/template` (not `text/template`) for security- Run integration tests with `bash scripts/integration-test.sh` (requires stop and re-running server, `pkill nclip` and `go run . &`)
-
 - Embed template data as a map in handlers- Address any issues found during testing and repeat until all tests pass
 
 - Support dynamic length input fields on the HTML page- Before pushing changes, ensure all above steps is passed and code is clean
@@ -228,7 +226,7 @@ func TestGenerateRandomAlphanumeric(t *testing.T) {- Detection via User-Agent st
 
 **CRITICAL**: All tests must clean up artifacts they create. The unified integration test script (`scripts/integration-test.sh`) uses:
 
-### Docker and Deployment- `TRASH_RECORD_FILE="/tmp/nclip_integration_slugs.txt"` to track created slugs
+### Docker and Deployment
 
 - Cleanup function removes only recorded slugs or recently modified files (`-mmin -60`)
 
@@ -256,29 +254,15 @@ func TestGenerateRandomAlphanumeric(t *testing.T) {- Detection via User-Agent st
 
    - Publish new versions on deploy
 
-### Upload-auth testing
-
-3. **Version Information**Upload-auth is a runtime toggle that requires clients to present an API key to upload content. Important points for tests and CI:
-
-   - Embed at build time using `-ldflags="-X main.version=..." -X main.BuildTime=... -X main.CommitHash=..."`- `NCLIP_UPLOAD_AUTH` (true/false) enables or disables upload API key enforcement.
-
-   - Print on startup and expose via metadata endpoint (if needed)- `NCLIP_API_KEYS` contains the comma-separated allowed keys the server accepts. In CI the integration job generates a random key and writes it here.
-
-- `NCLIP_TEST_API_KEY` (or `NCLIP_TEST_API_KEY_BEARER`) is used by the integration script to authenticate requests when `NCLIP_UPLOAD_AUTH=true`.
-
 ### CI/CD Workflows- Integration tests assert unauthenticated uploads return 401 when auth is enabled and verify authenticated uploads succeed using the generated test key.
 
 
 
 1. **test.yml** (on push/PR to main)### Environment Variables
 
-   - Run `go fmt`, `go vet`, `golangci-lint run`, `go test`Key config vars (all prefixed with `NCLIP_`):
+   - Run `go fmt`, `go vet`, `golangci-lint run`, `go test`
 
-   - Fail fast on format or lint issues- `NCLIP_DATA_DIR` - Storage directory for server mode (default: "./data")
-
-   - `NCLIP_PORT`, `NCLIP_TTL`, `NCLIP_BUFFER_SIZE` - Basic config
-
-2. **build.yml** (on tags v*)- `NCLIP_S3_BUCKET`, `NCLIP_S3_PREFIX` - Lambda mode S3 settings
+2. **build.yml** (on tags v*)
 
    - Multi-arch build (linux/amd64, linux/arm64, etc.)- `DEBUG` - Enables verbose logging including all environment variables
 
