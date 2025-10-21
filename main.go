@@ -48,8 +48,7 @@ func cryptoRandInt(max int) int {
 	}
 	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
 	if err != nil {
-		// This should rarely happen, but fallback to 0 if it does
-		return 0
+		log.Fatalf("crypto/rand failed: %v", err)
 	}
 	return int(n.Int64())
 }
