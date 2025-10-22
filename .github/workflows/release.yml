@@ -146,7 +146,7 @@ jobs:
           EXPECT_P_LEN: "38"
         run: |
           set -euo pipefail
-          URL="http://:8080/json?a=$EXPECT_A_LEN&p=$EXPECT_P_LEN"
+          URL="http://localhost:8080/json?a=$EXPECT_A_LEN&p=$EXPECT_P_LEN"
 
           chmod +x verify/*/random || true
           # Find the binary we packaged as 'random'
