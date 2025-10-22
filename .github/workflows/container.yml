@@ -133,14 +133,17 @@ jobs:
         env:
           EXPECT_A_LEN: "18"
           EXPECT_P_LEN: "28"
-          URL: "http://localhost:8080/json?a=$EXPECT_A_LEN&p=$EXPECT_P_LEN"
         run: |
           set -euo pipefail
+          URL="http://localhost:8080/json?a=$EXPECT_A_LEN&p=$EXPECT_P_LEN"
+
           RESP=$(curl -fsS "$URL")
           echo "Response: $RESP"
+
           # Measure lengths of the returned strings
           A_LEN=$(echo "$RESP" | jq -r '.alphanumeric.string | length')
           P_LEN=$(echo "$RESP" | jq -r '.printable.string | length')
+
           echo "Computed lengths -> alphanumeric: $A_LEN, printable: $P_LEN"
           if [ "$A_LEN" != "$EXPECT_A_LEN" ]; then
             echo "Expected alphanumeric length $EXPECT_A_LEN, got $A_LEN" >&2

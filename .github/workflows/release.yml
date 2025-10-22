@@ -144,9 +144,10 @@ jobs:
         env:
           EXPECT_A_LEN: "28"
           EXPECT_P_LEN: "38"
-          URL: "http://localhost:8080/json?a=$EXPECT_A_LEN&p=$EXPECT_P_LEN"
         run: |
           set -euo pipefail
+          URL="http://:8080/json?a=$EXPECT_A_LEN&p=$EXPECT_P_LEN"
+
           chmod +x verify/*/random || true
           # Find the binary we packaged as 'random'
           BINARY=$(find verify -type f -name random | head -n1)
@@ -155,6 +156,7 @@ jobs:
             find verify -maxdepth 4 -print
             exit 1
           fi
+
           echo "Starting binary: $BINARY"
           # Start server on localhost
           nohup "$BINARY" > server.log 2>&1 &
