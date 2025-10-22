@@ -115,9 +115,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -143,16 +140,14 @@ jobs:
           tar -xzf "${{ steps.find_archive.outputs.archive }}" -C verify
           ls -la verify
 
-      - name: Install jq
-        run: sudo apt-get update -y && sudo apt-get install -y jq
-
       - name: Run server in background and smoke test
         env:
-          URL: "http://localhost:8080/json?a=22&p=33"
-          EXPECT_A_LEN: "22"
-          EXPECT_P_LEN: "33"
+          EXPECT_A_LEN: "28"
+          EXPECT_P_LEN: "38"
         run: |
           set -euo pipefail
+          URL="http://:8080/json?a=$EXPECT_A_LEN&p=$EXPECT_P_LEN"
+
           chmod +x verify/*/random || true
           # Find the binary we packaged as 'random'
           BINARY=$(find verify -type f -name random | head -n1)
@@ -161,6 +156,7 @@ jobs:
             find verify -maxdepth 4 -print
             exit 1
           fi
+
           echo "Starting binary: $BINARY"
           # Start server on localhost
           nohup "$BINARY" > server.log 2>&1 &

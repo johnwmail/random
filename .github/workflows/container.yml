@@ -119,31 +119,31 @@ jobs:
       - name: Health check
         run: |
           set -e
-          for i in {1..30}; do
+          for i in {1..15}; do
             if curl -fsS http://localhost:8080/ >/dev/null; then
               echo "Service is healthy"; exit 0
             fi
-            sleep 2
+            sleep 1
           done
           echo "Service did not become healthy" >&2
           docker logs app-under-test || true
           exit 1
 
-      - name: Install jq
-        run: sudo apt-get update -y && sudo apt-get install -y jq
-
       - name: "Functional check: /json length validation"
         env:
-          URL: "http://localhost:8080/json?a=22&p=33"
-          EXPECT_A_LEN: "22"
-          EXPECT_P_LEN: "33"
+          EXPECT_A_LEN: "18"
+          EXPECT_P_LEN: "28"
         run: |
           set -euo pipefail
+          URL="http://localhost:8080/json?a=$EXPECT_A_LEN&p=$EXPECT_P_LEN"
+
           RESP=$(curl -fsS "$URL")
           echo "Response: $RESP"
+
           # Measure lengths of the returned strings
           A_LEN=$(echo "$RESP" | jq -r '.alphanumeric.string | length')
           P_LEN=$(echo "$RESP" | jq -r '.printable.string | length')
+
           echo "Computed lengths -> alphanumeric: $A_LEN, printable: $P_LEN"
           if [ "$A_LEN" != "$EXPECT_A_LEN" ]; then
             echo "Expected alphanumeric length $EXPECT_A_LEN, got $A_LEN" >&2
