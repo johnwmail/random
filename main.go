@@ -323,6 +323,10 @@ func (h *universalHandler) tryAPIGatewayV1(ctx context.Context, payload []byte) 
 			return nil, err
 		}
 		resp = sanitizeV1Response(resp)
+		// Copy Content-Type from MultiValueHeaders to Headers for ALB compatibility
+		if ctype, ok := resp.MultiValueHeaders["Content-Type"]; ok && len(ctype) > 0 {
+			resp.Headers["Content-Type"] = ctype[0]
+		}
 		return json.Marshal(resp)
 	}
 	return nil, fmt.Errorf("not v1")
@@ -394,6 +398,10 @@ func (h *universalHandler) coerceToV1(ctx context.Context, generic map[string]in
 		return nil, err
 	}
 	resp = sanitizeV1Response(resp)
+	// Copy Content-Type from MultiValueHeaders to Headers for ALB compatibility
+	if ctype, ok := resp.MultiValueHeaders["Content-Type"]; ok && len(ctype) > 0 {
+		resp.Headers["Content-Type"] = ctype[0]
+	}
 	return json.Marshal(resp)
 }
 
@@ -412,6 +420,10 @@ func (h *universalHandler) tryV1Fallback(ctx context.Context, payload []byte) ([
 		return nil, fmt.Errorf("unable to coerce generic payload to v1 proxy: %w", err)
 	}
 	resp = sanitizeV1Response(resp)
+	// Copy Content-Type from MultiValueHeaders to Headers for ALB compatibility
+	if ctype, ok := resp.MultiValueHeaders["Content-Type"]; ok && len(ctype) > 0 {
+		resp.Headers["Content-Type"] = ctype[0]
+	}
 	return json.Marshal(resp)
 }
 
