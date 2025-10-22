@@ -22,6 +22,9 @@ import (
 var ginLambda *ginadapter.GinLambda
 var ginLambdaV2 *ginadapter.GinLambdaV2
 
+// Maximum allowed length for random string generation, for DOS safety.
+const MaxAllowedLength = 99
+
 // map of user-agent signatures considered CLI/programmatic clients for O(1) lookup
 var cliSignaturesMap = map[string]struct{}{
 	"curl":            {},
