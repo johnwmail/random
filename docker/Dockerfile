@@ -7,11 +7,11 @@ ARG VERSION
 WORKDIR /src
 COPY . ./
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -tags=netgo -trimpath \
+    go build -v \
        -ldflags="-w -s -X 'main.BuildTime=$(date --utc +%Y-%m-%dT%H:%M:%SZ)' \
        -X 'main.CommitHash=$(git rev-parse HEAD)' \
        -X 'main.Version=${VERSION:-latest}'" \
-       -v -o /random .
+       -o /random .
 
 FROM scratch
 
