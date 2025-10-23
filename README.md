@@ -106,6 +106,7 @@ The service intentionally keeps configuration surface area small. Important knob
 |--------|-------------|
 | Query `p` | Printable string length (default random 12–30) |
 | Query `a` | Alphanumeric string length (default random 12–30) |
+| Env `PORT` | Port for the web server to listen on (default `8080`) |
 | Env `AWS_LAMBDA_FUNCTION_NAME` | Enables Lambda adapter mode |
 
 Values outside 1–99 are clamped automatically.
