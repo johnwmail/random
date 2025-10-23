@@ -238,13 +238,19 @@ func main() {
 
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
 		// Running on AWS Lambda
+		fmt.Printf("Running in AWS Lambda environment\n")
 		ginLambda = ginadapter.New(r)
 		ginLambdaV2 = ginadapter.NewV2(r)
 		lambda.Start(&universalHandler{v1: ginLambda, v2: ginLambdaV2})
 	} else {
 		// Running locally
-		if err := r.Run(":8080"); err != nil {
-			log.Fatalf("failed to run server: %v", err)
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		fmt.Printf("Running in HTTP Server mode on port %s\n", port)
+		if err := r.Run(":" + port); err != nil {
+			log.Fatalf("Failed to run HTTP Server mode on port %s: %v", port, err)
 		}
 	}
 }
