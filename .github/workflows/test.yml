@@ -222,3 +222,66 @@ jobs:
           name: random-${{ matrix.goos }}-${{ matrix.goarch }}-go${{ matrix.go-version }}
           path: dist/
           retention-days: 7
+
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+      - name: Download linux-amd64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: random-linux-amd64-go1.24
+          path: dist/
+
+      - name: Run smoke test
+        env:
+          EXPECT_A_LEN: "38"
+          EXPECT_P_LEN: "48"
+        run: |
+          set -euo pipefail
+          URL="http://localhost:8080/json?a=$EXPECT_A_LEN&p=$EXPECT_P_LEN"
+
+          chmod +x dist/random_linux_amd64
+
+          echo "Starting binary: dist/random_linux_amd64"
+          nohup ./dist/random_linux_amd64 > server.log 2>&1 &
+          PID=$!
+          echo "server pid=$PID"
+
+          # Wait for server to start (max 15s)
+          for i in {1..15}; do
+            if curl -sSf "http://localhost:8080/json" > /dev/null 2>&1; then
+              echo "server is responding"
+              break
+            fi
+            if [ $i -eq 15 ]; then
+              echo "Server failed to start"
+              cat server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # Smoke test the /json endpoint
+          RESP=$(curl -fsS "$URL")
+          echo "Response: $RESP"
+
+          # Measure lengths of the returned strings
+          A_LEN=$(echo "$RESP" | jq -r '.alphanumeric.string | length')
+          P_LEN=$(echo "$RESP" | jq -r '.printable.string | length')
+
+          echo "Computed lengths -> alphanumeric: $A_LEN, printable: $P_LEN"
+          if [ "$A_LEN" != "$EXPECT_A_LEN" ]; then
+            echo "Expected alphanumeric length $EXPECT_A_LEN, got $A_LEN" >&2
+            exit 1
+          fi
+          if [ "$P_LEN" != "$EXPECT_P_LEN" ]; then
+            echo "Expected printable length $EXPECT_P_LEN, got $P_LEN" >&2
+            exit 1
+          fi
+
+          # Kill server
+          kill $PID || true
+          sleep 1
