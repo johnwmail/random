@@ -221,6 +221,7 @@ jobs:
         with:
           name: random-${{ matrix.goos }}-${{ matrix.goarch }}-go${{ matrix.go-version }}
           path: dist/
+          retention-days: 7
 
   smoke-test:
     name: Smoke Test
