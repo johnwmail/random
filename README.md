@@ -3,7 +3,7 @@
 [![Test](https://github.com/johnwmail/random/workflows/Test/badge.svg)](https://github.com/johnwmail/random/actions/workflows/test.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/johnwmail/random)](https://goreportcard.com/report/github.com/johnwmail/random)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Go Version](https://img.shields.io/badge/go-1.24+-blue.svg)](go.mod)
+[![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](go.mod)
 
 A tiny Go web service that generates secure random strings via HTML and JSON endpoints. The service runs locally, in Docker, or on AWS Lambda via the aws-lambda-go-api-proxy adapters.
 
@@ -44,7 +44,7 @@ Query parameters let callers control the length of each string while the server 
 
 ### Run with Go
 
-Requires Go 1.24+.
+Requires Go 1.23+.
 
 ```bash
 git clone https://github.com/johnwmail/random.git
